@@ -5,13 +5,8 @@ import {
   isStandalonePWA,
   requestFullscreenBestEffort,
 } from "./fullscreen.js";
-import { AnaMessageModal } from "./AnaMessageModal.jsx";
-import { FloatingChatBubbles } from "./FloatingChatBubbles.jsx";
+import { AnaMessagesOverlay } from "./AnaMessagesOverlay.jsx";
 import { FloatingParty } from "./FloatingParty.jsx";
-import {
-  hasSharedMessages,
-  loadAnaMessages,
-} from "./anaMessagesStorage.js";
 import { getStepImages } from "./storyImages.js";
 
 const ASSET_BASE = import.meta.env.BASE_URL;
@@ -144,6 +139,7 @@ function ProductionCountdownScreen({ endMs, nowMs }) {
           {String(h).padStart(2, "0")}:{String(m).padStart(2, "0")}:{String(s).padStart(2, "0")}
         </p>
       </div>
+      <AnaMessagesOverlay />
     </div>
   );
 }
@@ -219,15 +215,11 @@ function StoryExperience() {
   const [inFullscreen, setInFullscreen] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [iosHelp, setIosHelp] = useState(false);
-  const [anaEntries, setAnaEntries] = useState([]);
-  const [anaModalOpen, setAnaModalOpen] = useState(false);
 
   const musicRef = useRef(null);
   const typeRef = useRef(null);
   const intervalRef = useRef(null);
   const holdTimer = useRef(null);
-  /** Invalida loads em voo (Strict Mode / sair da última tela). */
-  const anaLoadSeqRef = useRef(0);
 
   const charDelayMs = import.meta.env.DEV ? 20 : 85;
 
@@ -290,32 +282,6 @@ function StoryExperience() {
 
   const isLastStep = step === messages.length - 1;
 
-  useEffect(() => {
-    if (!isLastStep) return;
-    const seq = ++anaLoadSeqRef.current;
-    loadAnaMessages()
-      .then((rows) => {
-        const stale = seq !== anaLoadSeqRef.current;
-        if (stale) return;
-        setAnaEntries(rows);
-      })
-      .catch(() => {
-        if (seq !== anaLoadSeqRef.current) return;
-        setAnaEntries([]);
-      });
-    return () => {
-      anaLoadSeqRef.current += 1;
-    };
-  }, [isLastStep, anaModalOpen]);
-
-  useEffect(() => {
-    if (!isLastStep || !hasSharedMessages()) return undefined;
-    const id = setInterval(() => {
-      loadAnaMessages().then(setAnaEntries).catch(() => {});
-    }, 28000);
-    return () => clearInterval(id);
-  }, [isLastStep]);
-
   const showFullscreenBanner =
     !standalone && !inFullscreen && !bannerDismissed;
 
@@ -361,7 +327,6 @@ function StoryExperience() {
 
   const restart = (e) => {
     e.stopPropagation();
-    setAnaModalOpen(false);
     setStep(0);
   };
 
@@ -479,51 +444,7 @@ function StoryExperience() {
         </div>
       )}
 
-      {isLastStep && (
-        <>
-          <FloatingChatBubbles entries={anaEntries} />
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setAnaModalOpen(true);
-            }}
-            style={{
-              position: "fixed",
-              left: "50%",
-              transform: "translateX(-50%)",
-              bottom: "max(20px, env(safe-area-inset-bottom))",
-              zIndex: 3,
-              padding: "14px 18px",
-              borderRadius: 14,
-              border: "1px solid rgba(255,200,100,0.45)",
-              background: "rgba(35,30,20,0.95)",
-              color: "#ffe8b8",
-              fontFamily: "monospace",
-              fontSize: "clamp(11px, 3.2vw, 14px)",
-              fontWeight: 600,
-              letterSpacing: "0.04em",
-              cursor: "pointer",
-              boxShadow: "0 8px 28px rgba(0,0,0,0.45)",
-              maxWidth: "calc(100vw - 32px)",
-            }}
-          >
-            DEIXE UMA MENSAGEM PARA A ANA
-          </button>
-          <AnaMessageModal
-            open={anaModalOpen}
-            onClose={() => setAnaModalOpen(false)}
-            onSaved={async () => {
-              try {
-                const rows = await loadAnaMessages();
-                setAnaEntries(rows);
-              } catch {
-                /* mantém lista atual */
-              }
-            }}
-          />
-        </>
-      )}
+      {isLastStep && <AnaMessagesOverlay />}
 
       <div
         style={{
