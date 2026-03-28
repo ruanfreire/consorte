@@ -114,6 +114,7 @@ export default defineConfig(({ mode }) => {
         name: "html-sharing-meta",
         transformIndexHtml(html) {
           const basePath = mode === "production" ? "/consorte" : "";
+          const assetBase = mode === "production" ? "/consorte/" : "/";
           const canonical =
             siteOrigin !== ""
               ? `${siteOrigin}${basePath}/`
@@ -130,6 +131,7 @@ export default defineConfig(({ mode }) => {
           }
 
           let out = html
+            .replaceAll("%ASSET_BASE%", assetBase)
             .replaceAll("%CANONICAL_URL%", canonical)
             .replaceAll("%OG_URL%", canonical)
             .replaceAll("%OG_IMAGE_URL%", ogImage)
