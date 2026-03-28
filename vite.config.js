@@ -86,10 +86,15 @@ export default defineConfig(({ mode }) => {
   const isCI =
     process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
   /** Em CI, variáveis do ambiente (secrets) ganham. Fora do CI, o `.env.production` versionado prevalece sobre variáveis soltas no SO (ex.: VITE_*). */
-  const committedProd =
+  const committedEnvFile =
     !isCI && mode === "production"
-      ? parseEnvFile(".env.production")
-      : {};
+      ? process.env.VITE_BUILD_MOCK === "true" ||
+        process.env.VITE_BUILD_MOCK === "1"
+        ? ".env.production.mock"
+        : ".env.production"
+      : null;
+  const committedProd =
+    committedEnvFile != null ? parseEnvFile(committedEnvFile) : {};
   const defineFromCommitted = {};
   for (const [k, v] of Object.entries(committedProd)) {
     if (k.startsWith("VITE_")) {
