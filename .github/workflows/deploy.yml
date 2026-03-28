@@ -17,9 +17,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
+      # Sobrescreve .env.production versionado (mock) — build em CI usa Supabase dos secrets.
+      VITE_USE_MOCK: "false"
       VITE_PUBLIC_SITE_URL: ${{ secrets.VITE_PUBLIC_SITE_URL }}
       VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
       VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      # Opcional: contagem regressiva em produção (ISO com fuso, ex.: 2026-04-03T19:00:00-03:00)
+      VITE_LAUNCH_AT: ${{ secrets.VITE_LAUNCH_AT }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

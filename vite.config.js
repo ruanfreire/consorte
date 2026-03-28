@@ -40,6 +40,30 @@ function readJpegDimensions(buf) {
   return null;
 }
 
+/** Parser simples de `.env` (sem dependência extra). */
+function parseEnvFile(relativePath) {
+  const full = resolve(process.cwd(), relativePath);
+  if (!existsSync(full)) return {};
+  const text = readFileSync(full, "utf8");
+  const out = {};
+  for (const line of text.split("\n")) {
+    const s = line.trim();
+    if (!s || s.startsWith("#")) continue;
+    const eq = s.indexOf("=");
+    if (eq < 1) continue;
+    const key = s.slice(0, eq).trim();
+    let val = s.slice(eq + 1).trim();
+    if (
+      (val.startsWith('"') && val.endsWith('"')) ||
+      (val.startsWith("'") && val.endsWith("'"))
+    ) {
+      val = val.slice(1, -1);
+    }
+    out[key] = val;
+  }
+  return out;
+}
+
 /** Dimensões e MIME reais (WhatsApp / LinkedIn / pré-visualizações). */
 function readOgCoverMeta() {
   const full = resolve(process.cwd(), "public", OG_FILE);
@@ -58,12 +82,30 @@ function readOgCoverMeta() {
 }
 
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), "");
-  const siteOrigin = (env.VITE_PUBLIC_SITE_URL || "").replace(/\/$/, "");
+  const loaded = loadEnv(mode, process.cwd(), "");
+  const isCI =
+    process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
+  /** Em CI, variáveis do ambiente (secrets) ganham. Fora do CI, o `.env.production` versionado prevalece sobre variáveis soltas no SO (ex.: VITE_*). */
+  const committedProd =
+    !isCI && mode === "production"
+      ? parseEnvFile(".env.production")
+      : {};
+  const defineFromCommitted = {};
+  for (const [k, v] of Object.entries(committedProd)) {
+    if (k.startsWith("VITE_")) {
+      defineFromCommitted[`import.meta.env.${k}`] = JSON.stringify(v ?? "");
+    }
+  }
+  const siteOrigin = (
+    committedProd.VITE_PUBLIC_SITE_URL ||
+    loaded.VITE_PUBLIC_SITE_URL ||
+    ""
+  ).replace(/\/$/, "");
   const ogMeta = readOgCoverMeta();
 
   return {
     base: mode === "production" ? GH_PAGES_BASE : "/",
+    define: defineFromCommitted,
     plugins: [
       react(),
       {
