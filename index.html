@@ -1,106 +1,111 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Nossa História 💛</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
+    />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Nossa História" />
+    <meta name="format-detection" content="telephone=no" />
 
-<style>
-body {
-  margin: 0;
-  background: black;
-  color: white;
-  font-family: monospace;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100vh;
-  text-align: center;
-  overflow: hidden;
-}
-#app { padding:20px; cursor:pointer; max-width:90%; }
-h1 { line-height:1.4; }
-.cursor { animation: blink 1s infinite; }
-@keyframes blink { 0%,50%,100%{opacity:1;} 25%,75%{opacity:0;} }
-img { margin-top:20px; max-height:250px; border-radius:12px; }
-button { margin-top:20px; padding:10px 20px; border-radius:20px; border:none; }
-</style>
-</head>
+    <title>Nossa História 💛</title>
+    <meta
+      name="description"
+      content="Uma história feita com carinho — entre, toque na tela e celebre esse dia especial com a gente."
+    />
+    <meta name="author" content="Consorte" />
+    <meta name="robots" content="index, follow" />
 
-<body>
-<div id="app">
-  <h1 id="text"></h1>
-  <div id="extra"></div>
-  <button id="restart" style="display:none">recomeçar 🔁💛</button>
-</div>
+    <link rel="canonical" href="%CANONICAL_URL%" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" type="%OG_IMAGE_TYPE%" href="og-cover.jpg" />
+    <link rel="apple-touch-icon" href="og-cover.jpg" />
 
-<audio id="typeSound" src="type.mp3"></audio>
-<audio id="music" src="music.mp3" loop></audio>
+    <!-- Open Graph: WhatsApp, Facebook, LinkedIn, iMessage, Telegram, Slack, Discord -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Nossa História 💛" />
+    <meta property="og:title" content="Nossa História 💛 — para você" />
+    <meta
+      property="og:description"
+      content="Tem coisas que a gente só consegue dizer assim: com calma, com verdade e com muito amor. Entra e vê."
+    />
+    <meta property="og:url" content="%OG_URL%" />
+    <meta property="og:image" content="%OG_IMAGE_URL%" />
+    <meta property="og:image:secure_url" content="%OG_IMAGE_URL%" />
+    <meta property="og:image:type" content="%OG_IMAGE_TYPE%" />
+    <meta property="og:image:width" content="%OG_IMAGE_WIDTH%" />
+    <meta property="og:image:height" content="%OG_IMAGE_HEIGHT%" />
+    <meta property="og:image:alt" content="Nossa história — momento a momento" />
+    <meta property="og:locale" content="pt_BR" />
 
-<script>
-const messages = [
-"toque na tela e entre nessa história 💛✨🐻",
-"a gente não se encontrou 🫣",
-"a gente se reconheceu 🧠✨💫",
-"no meio de tanta conversa vazia 🫠",
-"tinha alguma coisa ali 👀💛",
-"não era comum 😳",
-"não era raso 🌊❌",
-"era diferente ✨🫶",
-"eu pedi 20 dias ⏳🥹",
-"não foi distância 🚫📏",
-"foi escolha 🧠💛",
-"foi porque eu quis te entender 🫶",
-"não só te viver rápido ⚡",
-"e você ficou 🫠💛🫶 🎉🙌🥹",
-"e isso disse muito mais 🥹",
-"mas hoje… não é um dia qualquer 🎂✨",
-"hoje é o seu dia 💛🥹",
-"que sorte a minha de viver isso com você 🫶",
-"EU TE AMO <3 💛🐻✨"
-];
+    <!-- Twitter / X (Android, iOS, Web) -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Nossa História 💛 — para você" />
+    <meta
+      name="twitter:description"
+      content="Tem coisas que a gente só consegue dizer assim: com calma, com verdade e com muito amor. Entra e vê."
+    />
+    <meta name="twitter:url" content="%OG_URL%" />
+    <meta name="twitter:image" content="%OG_IMAGE_URL%" />
+    <meta name="twitter:image:alt" content="Nossa história — momento a momento" />
 
-let step = 0, typing = false, interval;
+    <!-- Microsoft / Windows / Android (tiles) -->
+    <meta name="msapplication-TileColor" content="#000000" />
+    <meta name="msapplication-TileImage" content="%OG_IMAGE_URL%" />
 
-const textEl = document.getElementById("text");
-const restartBtn = document.getElementById("restart");
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "@id": "%CANONICAL_URL%#website",
+        "name": "Nossa História",
+        "url": "%CANONICAL_URL%",
+        "description": "Uma história feita com carinho — entre, toque na tela e celebre esse dia especial com a gente.",
+        "inLanguage": "pt-BR",
+        "image": {
+          "@type": "ImageObject",
+          "url": "%OG_IMAGE_URL%",
+          "width": %OG_IMAGE_WIDTH%,
+          "height": %OG_IMAGE_HEIGHT%
+        }
+      }
+    </script>
 
-function typeText(msg){
-  clearInterval(interval);
-  typing = true;
-  let i=0;
-  interval = setInterval(()=>{
-    if(i<msg.length){
-      textEl.innerHTML = msg.slice(0,i+1)+'<span class="cursor">|</span>';
-      i++;
-    } else {
-      clearInterval(interval);
-      typing=false;
-      textEl.innerHTML = msg;
-    }
-  },85);
-}
-
-function next(){
-  if(typing) return;
-  if(step < messages.length-1){
-    step++;
-    typeText(messages[step]);
-  } else {
-    restartBtn.style.display="block";
-  }
-}
-
-document.getElementById("app").onclick = next;
-
-restartBtn.onclick = (e)=>{
-  e.stopPropagation();
-  step=0;
-  typeText(messages[0]);
-  restartBtn.style.display="none";
-};
-
-typeText(messages[0]);
-</script>
-</body>
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        min-height: 100%;
+        min-height: 100dvh;
+        overflow: hidden;
+        background: #000;
+        touch-action: manipulation;
+        -webkit-text-size-adjust: 100%;
+      }
+      #root {
+        width: 100%;
+        height: 100%;
+        min-height: 100%;
+        min-height: 100dvh;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/index.js"></script>
+  </body>
 </html>

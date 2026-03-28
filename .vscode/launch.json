@@ -1,0 +1,28 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "chrome",
+      "request": "launch",
+      "name": "Build + Preview (Chrome)",
+      "url": "http://localhost:4173/consorte/",
+      "webRoot": "${workspaceFolder}",
+      "preLaunchTask": "build then preview"
+    },
+    {
+      "type": "chrome",
+      "request": "launch",
+      "name": "Dev (Chrome)",
+      "url": "http://localhost:5173/",
+      "webRoot": "${workspaceFolder}",
+      "preLaunchTask": "vite: dev"
+    },
+    {
+      "name": "Attach to Chrome",
+      "port": 9222,
+      "request": "attach",
+      "type": "chrome",
+      "webRoot": "${workspaceFolder}"
+    }
+  ]
+}
