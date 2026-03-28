@@ -106,6 +106,8 @@ export default defineConfig(({ mode }) => {
   return {
     base: mode === "production" ? GH_PAGES_BASE : "/",
     define: defineFromCommitted,
+    /** GitHub Pages (deploy pela branch) só aceita `/` ou `/docs` — não `dist`. */
+    build: { outDir: "docs", emptyOutDir: true },
     plugins: [
       react(),
       {
