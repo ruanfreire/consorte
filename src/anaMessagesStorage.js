@@ -26,7 +26,9 @@ const supabase =
 function requireSupabase() {
   if (!supabase) {
     throw new Error(
-      "Mensagens indisponíveis: defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no .env e faça o build de novo.",
+      import.meta.env.DEV
+        ? "Mensagens indisponíveis: crie .env.local com VITE_SUPABASE_URL (https://xxx.supabase.co) e VITE_SUPABASE_ANON_KEY (Project Settings → API → anon public). Não use senha do Postgres nem connection string."
+        : "Mensagens indisponíveis: o build não incluiu o Supabase. Use GitHub Actions com secrets ou .env.production.local + npm run build.",
     );
   }
   return supabase;
