@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nossa História 💛</title>
+
+<style>
+body {
+  margin: 0;
+  background: black;
+  color: white;
+  font-family: monospace;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  text-align: center;
+  overflow: hidden;
+}
+#app { padding:20px; cursor:pointer; max-width:90%; }
+h1 { line-height:1.4; }
+.cursor { animation: blink 1s infinite; }
+@keyframes blink { 0%,50%,100%{opacity:1;} 25%,75%{opacity:0;} }
+img { margin-top:20px; max-height:250px; border-radius:12px; }
+button { margin-top:20px; padding:10px 20px; border-radius:20px; border:none; }
+</style>
+</head>
+
+<body>
+<div id="app">
+  <h1 id="text"></h1>
+  <div id="extra"></div>
+  <button id="restart" style="display:none">recomeçar 🔁💛</button>
+</div>
+
+<audio id="typeSound" src="type.mp3"></audio>
+<audio id="music" src="music.mp3" loop></audio>
+
+<script>
+const messages = [
+"toque na tela e entre nessa história 💛✨🐻",
+"a gente não se encontrou 🫣",
+"a gente se reconheceu 🧠✨💫",
+"no meio de tanta conversa vazia 🫠",
+"tinha alguma coisa ali 👀💛",
+"não era comum 😳",
+"não era raso 🌊❌",
+"era diferente ✨🫶",
+"eu pedi 20 dias ⏳🥹",
+"não foi distância 🚫📏",
+"foi escolha 🧠💛",
+"foi porque eu quis te entender 🫶",
+"não só te viver rápido ⚡",
+"e você ficou 🫠💛🫶 🎉🙌🥹",
+"e isso disse muito mais 🥹",
+"mas hoje… não é um dia qualquer 🎂✨",
+"hoje é o seu dia 💛🥹",
+"que sorte a minha de viver isso com você 🫶",
+"EU TE AMO <3 💛🐻✨"
+];
+
+let step = 0, typing = false, interval;
+
+const textEl = document.getElementById("text");
+const restartBtn = document.getElementById("restart");
+
+function typeText(msg){
+  clearInterval(interval);
+  typing = true;
+  let i=0;
+  interval = setInterval(()=>{
+    if(i<msg.length){
+      textEl.innerHTML = msg.slice(0,i+1)+'<span class="cursor">|</span>';
+      i++;
+    } else {
+      clearInterval(interval);
+      typing=false;
+      textEl.innerHTML = msg;
+    }
+  },85);
+}
+
+function next(){
+  if(typing) return;
+  if(step < messages.length-1){
+    step++;
+    typeText(messages[step]);
+  } else {
+    restartBtn.style.display="block";
+  }
+}
+
+document.getElementById("app").onclick = next;
+
+restartBtn.onclick = (e)=>{
+  e.stopPropagation();
+  step=0;
+  typeText(messages[0]);
+  restartBtn.style.display="none";
+};
+
+typeText(messages[0]);
+</script>
+</body>
+</html>
