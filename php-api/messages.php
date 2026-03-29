@@ -1,7 +1,8 @@
 <?php
 /**
  * API simples: GET lista mensagens | POST cria mensagem (JSON).
- * Requer PHP 8.0+ (extensões: pdo_mysql, json).
+ * CORS resolvido no início (antes de config/DB) para o preflight OPTIONS funcionar.
+ * Requer PHP 8.0+ (pdo_mysql, json).
  */
 declare(strict_types=1);
 
@@ -9,6 +10,61 @@ const MAX_TEXT_LEN = 300;
 const MAX_IMAGE_BASE64_LEN = 200_000;
 const LIST_LIMIT = 80;
 const MAX_JSON_BYTES = 2_200_000;
+
+/**
+ * Origens permitidas (browser envia Origin exatamente assim).
+ * Manter alinhado com o front em `src/config.js` / deploy.
+ */
+const CORS_ALLOWED_ORIGINS = [
+    'https://ruanfreire.github.io',
+    'https://consorte.fwh.is',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+];
+
+/**
+ * @return string|null Origem a ecoar em Access-Control-Allow-Origin, ou null se proibido
+ */
+function cors_allow_origin(): ?string
+{
+    $req = isset($_SERVER['HTTP_ORIGIN']) ? trim((string) $_SERVER['HTTP_ORIGIN']) : '';
+    if ($req !== '' && in_array($req, CORS_ALLOWED_ORIGINS, true)) {
+        return $req;
+    }
+    if ($req === '' && isset(CORS_ALLOWED_ORIGINS[0])) {
+        return CORS_ALLOWED_ORIGINS[0];
+    }
+
+    return null;
+}
+
+function send_cors_headers(string $allowOrigin): void
+{
+    header('Access-Control-Allow-Origin: ' . $allowOrigin);
+    header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type, Accept');
+    header('Access-Control-Max-Age: 86400');
+    header('Vary: Origin');
+}
+
+$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+$incomingOrigin = isset($_SERVER['HTTP_ORIGIN']) ? (string) $_SERVER['HTTP_ORIGIN'] : '';
+$resolved = cors_allow_origin();
+
+if ($incomingOrigin !== '' && $resolved === null) {
+    http_response_code(403);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['ok' => false, 'error' => 'cors_forbidden'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+$aco = $resolved ?? CORS_ALLOWED_ORIGINS[0];
+send_cors_headers($aco);
+
+if ($method === 'OPTIONS') {
+    http_response_code(204);
+    exit;
+}
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -19,49 +75,8 @@ if (!is_readable($configPath)) {
     exit;
 }
 
-/** @var array{db: array<string, mixed>, cors_origin?: string, cors_origins?: string[]} $cfg */
+/** @var array{db: array<string, mixed>} $cfg */
 $cfg = require $configPath;
-$requestOrigin = isset($_SERVER['HTTP_ORIGIN']) ? (string) $_SERVER['HTTP_ORIGIN'] : '';
-$origin = '';
-
-if (!empty($cfg['cors_origins']) && is_array($cfg['cors_origins'])) {
-    if ($requestOrigin !== '' && in_array($requestOrigin, $cfg['cors_origins'], true)) {
-        $origin = $requestOrigin;
-    } elseif ($requestOrigin === '' && isset($cfg['cors_origins'][0])) {
-        $origin = (string) $cfg['cors_origins'][0];
-    } else {
-        $origin = '';
-    }
-} elseif (isset($cfg['cors_origin']) && is_string($cfg['cors_origin'])) {
-    $co = $cfg['cors_origin'];
-    if ($co === '*') {
-        $origin = '*';
-    } elseif ($requestOrigin !== '' && $requestOrigin === $co) {
-        $origin = $requestOrigin;
-    } elseif ($requestOrigin === '' && $co !== '') {
-        $origin = $co;
-    } elseif ($co !== '') {
-        $origin = $co;
-    }
-} else {
-    $origin = '*';
-}
-
-if ($origin === '') {
-    http_response_code(403);
-    echo json_encode(['ok' => false, 'error' => 'cors_forbidden'], JSON_UNESCAPED_UNICODE);
-    exit;
-}
-
-header('Access-Control-Allow-Origin: ' . $origin);
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
-header('Vary: Origin');
-
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(204);
-    exit;
-}
 
 $db = $cfg['db'] ?? [];
 $dsn = sprintf(
@@ -88,8 +103,6 @@ try {
     echo json_encode(['ok' => false, 'error' => 'db_unavailable'], JSON_UNESCAPED_UNICODE);
     exit;
 }
-
-$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
 if ($method === 'GET') {
     try {

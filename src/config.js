@@ -9,8 +9,16 @@ export const MOCK_CONFIG = {
   VITE_LAUNCH_AT: "2026-04-03T19:00:00-03:00",
   VITE_PUBLIC_SITE_URL: "https://ruanfreire.github.io/consorte",
   VITE_PREVIEW_ULTIMA: "",
-  /** API PHP+MySQL (mensagens partilhadas em produção). */
+  /**
+   * API PHP+MySQL. Abrir este URL na barra do navegador mostra JSON — isso não usa CORS.
+   * Já um `fetch` a partir do GitHub Pages ou de outro domínio exige cabeçalhos CORS no PHP.
+   */
   VITE_MESSAGES_API_URL: "https://consorte.fwh.is/messages.php",
+  /**
+   * Só em `npm run dev`. `"true"` = usa proxy Vite `/api/messages` (evita CORS em localhost).
+   * `"false"` = só SQLite local.
+   */
+  VITE_DEV_USE_REMOTE_MESSAGES_API: "true",
 };
 
 export function isLocalHost() {
@@ -32,9 +40,22 @@ export function getViteConfig(key) {
   return MOCK_CONFIG[key] ?? "";
 }
 
-/** URL da API PHP (`messages.php`), ou string vazia se usar só SQLite no browser. */
+/**
+ * URL da API PHP (`messages.php`), ou string vazia se usar só SQLite no browser.
+ * Em dev: só chama a API se `VITE_DEV_USE_REMOTE_MESSAGES_API` for `"true"` (via proxy `/api/messages`).
+ * Em produção: usa sempre `VITE_MESSAGES_API_URL`.
+ */
 export function getMessagesApiUrl() {
-  return String(MOCK_CONFIG.VITE_MESSAGES_API_URL ?? "").trim();
+  const raw = String(MOCK_CONFIG.VITE_MESSAGES_API_URL ?? "").trim();
+  if (!raw) return "";
+  if (import.meta.env.DEV) {
+    const useRemote =
+      MOCK_CONFIG.VITE_DEV_USE_REMOTE_MESSAGES_API === "true" ||
+      MOCK_CONFIG.VITE_DEV_USE_REMOTE_MESSAGES_API === "1";
+    if (!useRemote) return "";
+    return raw.startsWith("http") ? "/api/messages" : raw;
+  }
+  return raw;
 }
 
 export function useMockMessages() {

@@ -14,6 +14,23 @@ export const ANA_MESSAGES_COLLECTION = "ana_messages";
 
 const JPEG_DATA_URL_PREFIX = "data:image/jpeg;base64,";
 
+/** Servidor devolveu página HTML em vez do JSON esperado do messages.php. */
+function isLikelyHtmlResponse(contentType, rawText) {
+  const t = String(rawText ?? "").trimStart();
+  if (t.startsWith("{") || t.startsWith("[")) return false;
+  const ct = String(contentType || "").toLowerCase();
+  if (ct.includes("text/html")) return true;
+  const tl = t.toLowerCase();
+  return (
+    tl.startsWith("<!doctype") || tl.startsWith("<html") || (tl.startsWith("<") && !tl.startsWith("{"))
+  );
+}
+
+const ERR_API_HTML = () =>
+  new Error(
+    "O servidor devolveu HTML (página ou placeholder), não o JSON do messages.php. O domínio tem de apontar para o alojamento onde o PHP corre (FTP na pasta pública) ou use o URL direto do hosting (ex.: …infinityfreeapp.com/messages.php). Para testar só a UI sem API, deixe VITE_MESSAGES_API_URL vazio em config.js (usa SQLite local).",
+  );
+
 const listeners = new Set();
 let remotePollTimer = null;
 
@@ -109,19 +126,38 @@ function selectAllMessages(db) {
 }
 
 async function loadAnaMessagesRemote(apiUrl) {
-  const res = await fetch(apiUrl, {
-    method: "GET",
-    mode: "cors",
-    cache: "no-store",
-    credentials: "omit",
-  });
+  let res;
+  try {
+    res = await fetch(apiUrl, {
+      method: "GET",
+      mode: "cors",
+      cache: "no-store",
+      credentials: "omit",
+    });
+  } catch (err) {
+    const m = String(err?.message ?? err);
+    if (/failed to fetch|networkerror|load failed/i.test(m)) {
+      throw new Error(
+        "Não foi possível ligar à API (rede ou bloqueio CORS). No GitHub Pages, confirme que messages.php no servidor envia Access-Control-Allow-Origin para o teu domínio.",
+      );
+    }
+    throw new Error("Servidor indisponível.");
+  }
+  const contentType = res.headers.get("content-type") || "";
+  const rawText = await res.text();
+  if (isLikelyHtmlResponse(contentType, rawText)) {
+    if (isLocalHost()) {
+      console.warn("[consorte] api_returned_html_not_json", { status: res.status, contentType });
+    }
+    throw ERR_API_HTML();
+  }
   if (!res.ok) {
     console.warn("[consorte] api_list_http", { status: res.status });
     throw new Error("Servidor indisponível.");
   }
   let data;
   try {
-    data = await res.json();
+    data = JSON.parse(rawText);
   } catch {
     throw new Error("Resposta inválida do servidor.");
   }
@@ -180,17 +216,36 @@ function validatePayload(text, photoDataUrl) {
 async function addAnaMessageRemote(apiUrl, { text, photoDataUrl }) {
   const t = validatePayload(text, photoDataUrl);
   const imageBase64 = imageDataUrlToStoredField(photoDataUrl);
-  const res = await fetch(apiUrl, {
-    method: "POST",
-    mode: "cors",
-    cache: "no-store",
-    credentials: "omit",
-    headers: { "Content-Type": "application/json; charset=utf-8" },
-    body: JSON.stringify({ text: t, image_base64: imageBase64 }),
-  });
+  let res;
+  try {
+    res = await fetch(apiUrl, {
+      method: "POST",
+      mode: "cors",
+      cache: "no-store",
+      credentials: "omit",
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+      body: JSON.stringify({ text: t, image_base64: imageBase64 }),
+    });
+  } catch (err) {
+    const m = String(err?.message ?? err);
+    if (/failed to fetch|networkerror|load failed/i.test(m)) {
+      throw new Error(
+        "Não foi possível guardar (rede ou CORS). Em produção, o PHP tem de permitir o domínio do site em CORS.",
+      );
+    }
+    throw new Error("Não foi possível guardar a mensagem.");
+  }
+  const postCt = res.headers.get("content-type") || "";
+  const postRaw = await res.text();
+  if (isLikelyHtmlResponse(postCt, postRaw)) {
+    if (isLocalHost()) {
+      console.warn("[consorte] api_post_returned_html", { status: res.status, contentType: postCt });
+    }
+    throw ERR_API_HTML();
+  }
   let data;
   try {
-    data = await res.json();
+    data = JSON.parse(postRaw);
   } catch {
     throw new Error("Resposta inválida do servidor.");
   }

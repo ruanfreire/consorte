@@ -53,6 +53,21 @@ function readJpegDimensions(buf) {
   return null;
 }
 
+/** Em `npm run dev`, o browser chama só `/api/messages` (mesma origem); o Vite reencaminha para a API remota e evita CORS. */
+function messagesApiProxyFromConfig() {
+  const raw = String(MOCK_CONFIG.VITE_MESSAGES_API_URL ?? "").trim();
+  if (!raw.startsWith("http")) return null;
+  try {
+    const u = new URL(raw);
+    return {
+      target: `${u.protocol}//${u.host}`,
+      path: `${u.pathname}${u.search}`,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function readOgCoverMeta() {
   const full = resolve(process.cwd(), "public", OG_FILE);
   const fallback = { w: 1200, h: 630, mime: "image/jpeg" };
@@ -75,10 +90,23 @@ export default defineConfig(({ mode }) => {
     .trim()
     .replace(/\/$/, "");
   const ogMeta = readOgCoverMeta();
+  const msgProxy = messagesApiProxyFromConfig();
 
   return {
     base,
     build: { outDir: "docs", emptyOutDir: true },
+    server: msgProxy
+      ? {
+          proxy: {
+            "/api/messages": {
+              target: msgProxy.target,
+              changeOrigin: true,
+              secure: true,
+              rewrite: () => msgProxy.path,
+            },
+          },
+        }
+      : {},
     plugins: [
       react(),
       {

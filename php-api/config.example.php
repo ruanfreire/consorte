@@ -1,6 +1,7 @@
 <?php
 /**
  * Copie para `config.php` e preencha (não commite `config.php`).
+ * CORS: ver constante CORS_ALLOWED_ORIGINS em `messages.php`.
  */
 return [
     'db' => [
@@ -10,15 +11,5 @@ return [
         'user' => 'seu_usuario',
         'pass' => 'sua_senha',
         'charset' => 'utf8mb4',
-    ],
-    /**
-     * Lista de origens permitidas (GitHub Pages + Vite local).
-     * Ou uma única string em `cors_origin` (legado).
-     */
-    'cors_origins' => [
-        'https://ruanfreire.github.io',
-        'https://consorte.fwh.is',
-        'http://localhost:5173',
-        'http://127.0.0.1:5173',
     ],
 ];
