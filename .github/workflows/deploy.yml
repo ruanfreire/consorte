@@ -17,7 +17,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # URL pública e metadados: `src/config.js` (`MOCK_CONFIG`) — sem variáveis de ambiente no build.
+    # Supabase: credenciais em `src/config.js` (MOCK_CONFIG), embutidas no build.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

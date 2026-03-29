@@ -3,7 +3,7 @@ import { AnaMessageModal } from "./AnaMessageModal.jsx";
 import { FloatingChatBubbles } from "./FloatingChatBubbles.jsx";
 import { loadAnaMessages, subscribeAnaMessages } from "./anaMessagesStorage.js";
 
-/** Junta entrada otimista à lista; evita duplicar quando o SQLite já devolveu o registo. */
+/** Junta entrada otimista à lista; evita duplicar quando o Supabase já devolveu o registo. */
 function mergeOptimisticEntries(entries, optimistic) {
   if (!optimistic) return entries;
   const duplicate = entries.some(
@@ -15,7 +15,7 @@ function mergeOptimisticEntries(entries, optimistic) {
 
 /**
  * Botão fixo + bolhas + modal para mensagens à Ana.
- * Persistência: SQLite (sql.js) + IndexedDB — `subscribeAnaMessages` após cada INSERT.
+ * Persistência: Supabase — `subscribeAnaMessages` (Realtime) após INSERT.
  */
 export function AnaMessagesOverlay() {
   const [entries, setEntries] = useState([]);

@@ -1,63 +1,46 @@
 /**
- * Mensagens: API PHP+MySQL se `getMessagesApiUrl()` estiver definido; senão SQLite (sql.js + IndexedDB).
+ * Mensagens à Ana: Supabase (PostgreSQL + Realtime).
  */
-import { getMessagesApiUrl, isLocalHost } from "./config.js";
-import { getSqliteDatabase, persistSqliteDatabase } from "./sqliteDb.js";
+import { isLocalHost } from "./config.js";
+import { getSupabase, supabase } from "./utils/supabase.js";
 
 export const MAX_MESSAGE_CHARS = 300;
 const MAX_PHOTO_CHARS = 200_000;
 export const ANA_MESSAGES_QUERY_LIMIT = 80;
-const MAX_ROWS = ANA_MESSAGES_QUERY_LIMIT;
 
-/** Nome lógico da tabela (histórico de código / UI). */
+/** Nome da tabela no Supabase (public.ana_messages). */
 export const ANA_MESSAGES_COLLECTION = "ana_messages";
+
+/** RLS / privilégios: INSERT ou SELECT após insert negado (ex.: HTTP 401 + código 42501). */
+function isRlsOrPrivilegeError(error) {
+  if (!error) return false;
+  const code = String(error.code ?? "");
+  const msg = String(error.message ?? "").toLowerCase();
+  return (
+    code === "42501" ||
+    code === "PGRST301" ||
+    msg.includes("permission denied") ||
+    msg.includes("row-level security")
+  );
+}
+
+/** PostgREST 404 / relação inexistente — a tabela ainda não foi criada no projeto. */
+function isMissingAnaMessagesTableError(error) {
+  if (!error) return false;
+  const code = String(error.code ?? "");
+  const msg = String(error.message ?? "").toLowerCase();
+  return (
+    code === "PGRST205" ||
+    code === "42P01" ||
+    msg.includes("schema cache") ||
+    msg.includes("does not exist")
+  );
+}
 
 const JPEG_DATA_URL_PREFIX = "data:image/jpeg;base64,";
 
-/** Servidor devolveu página HTML em vez do JSON esperado do messages.php. */
-function isLikelyHtmlResponse(contentType, rawText) {
-  const t = String(rawText ?? "").trimStart();
-  if (t.startsWith("{") || t.startsWith("[")) return false;
-  const ct = String(contentType || "").toLowerCase();
-  if (ct.includes("text/html")) return true;
-  const tl = t.toLowerCase();
-  return (
-    tl.startsWith("<!doctype") || tl.startsWith("<html") || (tl.startsWith("<") && !tl.startsWith("{"))
-  );
-}
-
-const ERR_API_HTML = () =>
-  new Error(
-    "O servidor devolveu HTML (página ou placeholder), não o JSON do messages.php. O domínio tem de apontar para o alojamento onde o PHP corre (FTP na pasta pública) ou use o URL direto do hosting (ex.: …infinityfreeapp.com/messages.php). Para testar só a UI sem API, deixe VITE_MESSAGES_API_URL vazio em config.js (usa SQLite local).",
-  );
-
 const listeners = new Set();
-let remotePollTimer = null;
-
-function startRemotePollIfNeeded() {
-  const api = getMessagesApiUrl();
-  if (!api || remotePollTimer) return;
-  remotePollTimer = setInterval(() => {
-    notifyAnaMessagesListeners();
-  }, 45_000);
-}
-
-function stopRemotePoll() {
-  if (remotePollTimer) {
-    clearInterval(remotePollTimer);
-    remotePollTimer = null;
-  }
-}
-
-/** Inscreve atualizações após INSERT ou polling (API remota). */
-export function subscribeAnaMessages(callback) {
-  listeners.add(callback);
-  if (getMessagesApiUrl()) startRemotePollIfNeeded();
-  return () => {
-    listeners.delete(callback);
-    if (listeners.size === 0) stopRemotePoll();
-  };
-}
+let realtimeChannel = null;
 
 function notifyAnaMessagesListeners() {
   for (const fn of listeners) {
@@ -67,6 +50,44 @@ function notifyAnaMessagesListeners() {
       console.warn("[consorte] subscribeAnaMessages:", e);
     }
   }
+}
+
+function ensureRealtimeChannel() {
+  if (!supabase || realtimeChannel) return;
+  realtimeChannel = supabase
+    .channel("ana_messages_realtime")
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: ANA_MESSAGES_COLLECTION,
+      },
+      () => {
+        notifyAnaMessagesListeners();
+      },
+    )
+    .subscribe((status) => {
+      if (status === "CHANNEL_ERROR" && isLocalHost()) {
+        console.warn("[consorte] supabase_realtime_channel_error");
+      }
+    });
+}
+
+function teardownRealtimeIfIdle() {
+  if (listeners.size > 0 || !supabase || !realtimeChannel) return;
+  supabase.removeChannel(realtimeChannel);
+  realtimeChannel = null;
+}
+
+/** Inscreve atualizações (Realtime INSERT + notificação local após insert). */
+export function subscribeAnaMessages(callback) {
+  listeners.add(callback);
+  ensureRealtimeChannel();
+  return () => {
+    listeners.delete(callback);
+    teardownRealtimeIfIdle();
+  };
 }
 
 function imageDataUrlToStoredField(dataUrl) {
@@ -95,105 +116,15 @@ function msFromTimeField(v) {
 
 export function normalizeAnaMessageRow(row) {
   const raw = row.image_base64 ?? row.imageBase64 ?? row.photo;
+  const textVal = row.message_text ?? row.text ?? "";
   const atSource = row.created_at ?? row.createdAt ?? row.at;
   const atNum = msFromTimeField(atSource);
   return {
     id: String(row.id ?? ""),
-    text: String(row.text ?? ""),
+    text: String(textVal),
     photo: storedFieldToPhotoDataUrl(raw),
     at: Number.isFinite(atNum) ? atNum : Date.now(),
   };
-}
-
-function devLogCount(n, source) {
-  if (isLocalHost()) {
-    console.info(`[consorte] mensagens (${source}): ${n}`);
-  }
-}
-
-function selectAllMessages(db) {
-  const stmt = db.prepare(
-    `SELECT id, text, image_base64, created_at FROM ana_messages
-     ORDER BY created_at DESC LIMIT ?`,
-  );
-  stmt.bind([MAX_ROWS]);
-  const out = [];
-  while (stmt.step()) {
-    out.push(stmt.getAsObject());
-  }
-  stmt.free();
-  return out;
-}
-
-async function loadAnaMessagesRemote(apiUrl) {
-  let res;
-  try {
-    res = await fetch(apiUrl, {
-      method: "GET",
-      mode: "cors",
-      cache: "no-store",
-      credentials: "omit",
-    });
-  } catch (err) {
-    const m = String(err?.message ?? err);
-    if (/failed to fetch|networkerror|load failed/i.test(m)) {
-      throw new Error(
-        "Não foi possível ligar à API (rede ou bloqueio CORS). No GitHub Pages, confirme que messages.php no servidor envia Access-Control-Allow-Origin para o teu domínio.",
-      );
-    }
-    throw new Error("Servidor indisponível.");
-  }
-  const contentType = res.headers.get("content-type") || "";
-  const rawText = await res.text();
-  if (isLikelyHtmlResponse(contentType, rawText)) {
-    if (isLocalHost()) {
-      console.warn("[consorte] api_returned_html_not_json", { status: res.status, contentType });
-    }
-    throw ERR_API_HTML();
-  }
-  if (!res.ok) {
-    console.warn("[consorte] api_list_http", { status: res.status });
-    throw new Error("Servidor indisponível.");
-  }
-  let data;
-  try {
-    data = JSON.parse(rawText);
-  } catch {
-    throw new Error("Resposta inválida do servidor.");
-  }
-  if (!data || data.ok !== true || !Array.isArray(data.messages)) {
-    console.warn("[consorte] api_list_shape");
-    throw new Error("Não foi possível ler as mensagens.");
-  }
-  devLogCount(data.messages.length, "API");
-  return data.messages.map((r) => normalizeAnaMessageRow(r));
-}
-
-/**
- * Lista mensagens (API remota ou SQLite local).
- */
-export async function loadAnaMessages() {
-  const apiUrl = getMessagesApiUrl();
-  if (apiUrl) {
-    try {
-      return await loadAnaMessagesRemote(apiUrl);
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      throw new Error("Não foi possível ler as mensagens.");
-    }
-  }
-
-  try {
-    const db = await getSqliteDatabase();
-    const raw = selectAllMessages(db);
-    devLogCount(raw.length, "SQLite");
-    return raw.map((r) => normalizeAnaMessageRow(r));
-  } catch (e) {
-    console.warn("[consorte] sqlite_load_failed", { message: String(e?.message ?? e) });
-    throw new Error(
-      "Não foi possível ler as mensagens. Tente recarregar a página ou limpar dados do site.",
-    );
-  }
 }
 
 function validatePayload(text, photoDataUrl) {
@@ -213,95 +144,68 @@ function validatePayload(text, photoDataUrl) {
   return t;
 }
 
-async function addAnaMessageRemote(apiUrl, { text, photoDataUrl }) {
+/**
+ * Lista mensagens (mais recentes primeiro, limite configurado).
+ */
+export async function loadAnaMessages() {
+  const client = getSupabase();
+  const { data, error } = await client
+    .from(ANA_MESSAGES_COLLECTION)
+    .select("id, message_text, image_base64, created_at")
+    .order("created_at", { ascending: false })
+    .limit(ANA_MESSAGES_QUERY_LIMIT);
+
+  if (error) {
+    if (isMissingAnaMessagesTableError(error)) {
+      console.warn(
+        "[consorte] A tabela public.ana_messages não existe neste projeto Supabase (HTTP 404 / PGRST205). Executa o ficheiro `supabase/schema.sql` no Dashboard → SQL → New query → Run. Depois: Database → Replication → ativar Realtime para `ana_messages` (INSERT).",
+      );
+    } else {
+      console.warn("[consorte] supabase_select_failed", { code: error.code });
+    }
+    throw new Error("Não foi possível ler as mensagens.");
+  }
+  const rows = Array.isArray(data) ? data : [];
+  if (isLocalHost()) {
+    console.info(`[consorte] mensagens (Supabase): ${rows.length}`);
+  }
+  return rows.map((r) => normalizeAnaMessageRow(r));
+}
+
+/**
+ * Insere mensagem.
+ */
+export async function addAnaMessage({ text, photoDataUrl }) {
   const t = validatePayload(text, photoDataUrl);
   const imageBase64 = imageDataUrlToStoredField(photoDataUrl);
-  let res;
-  try {
-    res = await fetch(apiUrl, {
-      method: "POST",
-      mode: "cors",
-      cache: "no-store",
-      credentials: "omit",
-      headers: { "Content-Type": "application/json; charset=utf-8" },
-      body: JSON.stringify({ text: t, image_base64: imageBase64 }),
-    });
-  } catch (err) {
-    const m = String(err?.message ?? err);
-    if (/failed to fetch|networkerror|load failed/i.test(m)) {
-      throw new Error(
-        "Não foi possível guardar (rede ou CORS). Em produção, o PHP tem de permitir o domínio do site em CORS.",
+
+  const client = getSupabase();
+  const { data, error } = await client
+    .from(ANA_MESSAGES_COLLECTION)
+    .insert({
+      message_text: t,
+      image_base64: imageBase64,
+    })
+    .select("id, message_text, image_base64, created_at")
+    .single();
+
+  if (error) {
+    if (isMissingAnaMessagesTableError(error)) {
+      console.warn(
+        "[consorte] A tabela public.ana_messages não existe neste projeto Supabase (HTTP 404 / PGRST205). Executa o ficheiro `supabase/schema.sql` no Dashboard → SQL → New query → Run.",
       );
+    } else if (isRlsOrPrivilegeError(error)) {
+      console.warn(
+        "[consorte] Insert bloqueado: RLS ou GRANT em falta (401 / 42501). No Supabase: SQL Editor → executa o bloco de políticas + `grant select, insert` do ficheiro `supabase/schema.sql`. Apaga políticas duplicadas da UI se conflitarem.",
+      );
+    } else {
+      console.warn("[consorte] supabase_insert_failed", { code: error.code });
     }
-    throw new Error("Não foi possível guardar a mensagem.");
-  }
-  const postCt = res.headers.get("content-type") || "";
-  const postRaw = await res.text();
-  if (isLikelyHtmlResponse(postCt, postRaw)) {
-    if (isLocalHost()) {
-      console.warn("[consorte] api_post_returned_html", { status: res.status, contentType: postCt });
-    }
-    throw ERR_API_HTML();
-  }
-  let data;
-  try {
-    data = JSON.parse(postRaw);
-  } catch {
-    throw new Error("Resposta inválida do servidor.");
-  }
-  if (!res.ok || !data || data.ok !== true || !data.message) {
-    console.warn("[consorte] api_post_failed", { status: res.status });
     throw new Error("Não foi possível guardar a mensagem.");
   }
   notifyAnaMessagesListeners();
   if (isLocalHost()) {
-    console.info("[consorte] API gravou mensagem", { id: data.message.id });
+    console.info("[consorte] Supabase gravou mensagem", { id: data?.id });
   }
-  return normalizeAnaMessageRow(data.message);
-}
-
-/**
- * Insere mensagem (API remota ou SQLite local).
- */
-export async function addAnaMessage({ text, photoDataUrl }) {
-  const apiUrl = getMessagesApiUrl();
-  if (apiUrl) {
-    try {
-      return await addAnaMessageRemote(apiUrl, { text, photoDataUrl });
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      throw new Error("Não foi possível guardar a mensagem.");
-    }
-  }
-
-  const t = validatePayload(text, photoDataUrl);
-  const imageBase64 = imageDataUrlToStoredField(photoDataUrl);
-  const id =
-    typeof crypto !== "undefined" && crypto.randomUUID
-      ? crypto.randomUUID()
-      : `msg-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
-  const createdAt = Date.now();
-
-  try {
-    const db = await getSqliteDatabase();
-    db.run(
-      `INSERT INTO ana_messages (id, text, image_base64, created_at)
-       VALUES (?, ?, ?, ?)`,
-      [id, t, imageBase64, createdAt],
-    );
-    await persistSqliteDatabase();
-    notifyAnaMessagesListeners();
-    if (isLocalHost()) {
-      console.info("[consorte] SQLite gravou mensagem", { id });
-    }
-    return normalizeAnaMessageRow({
-      id,
-      text: t,
-      image_base64: imageBase64,
-      created_at: createdAt,
-    });
-  } catch (e) {
-    console.warn("[consorte] sqlite_insert_failed", { message: String(e?.message ?? e) });
-    throw new Error("Não foi possível guardar a mensagem. Verifique o espaço de armazenamento do browser.");
-  }
+  return normalizeAnaMessageRow(data);
 }

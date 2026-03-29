@@ -1,7 +1,6 @@
 /**
- * Única fonte de configuração (sem ficheiros .env).
- * Mensagens à Ana: se `VITE_MESSAGES_API_URL` estiver preenchido, usa a API PHP+MySQL;
- * caso contrário, SQLite no browser (`sql.js` + IndexedDB).
+ * Única fonte de configuração da app (inclui ligação ao Supabase).
+ * A chave publicável é exposta no bundle do browser (normal para Supabase + RLS).
  */
 
 export const MOCK_CONFIG = {
@@ -9,16 +8,11 @@ export const MOCK_CONFIG = {
   VITE_LAUNCH_AT: "2026-04-03T19:00:00-03:00",
   VITE_PUBLIC_SITE_URL: "https://ruanfreire.github.io/consorte",
   VITE_PREVIEW_ULTIMA: "",
-  /**
-   * API PHP+MySQL. Abrir este URL na barra do navegador mostra JSON — isso não usa CORS.
-   * Já um `fetch` a partir do GitHub Pages ou de outro domínio exige cabeçalhos CORS no PHP.
-   */
-  VITE_MESSAGES_API_URL: "https://consorte.fwh.is/messages.php",
-  /**
-   * Só em `npm run dev`. `"true"` = usa proxy Vite `/api/messages` (evita CORS em localhost).
-   * `"false"` = só SQLite local.
-   */
-  VITE_DEV_USE_REMOTE_MESSAGES_API: "true",
+
+  /** Supabase — projeto (URL + chave publicável/anónima). */
+  VITE_SUPABASE_URL: "https://yneutghdrmvkspzoqvum.supabase.co",
+  VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY:
+    "sb_publishable_YtgmFQoIACtxLsRRuJ_ofg_FFgIDm5E",
 };
 
 export function isLocalHost() {
@@ -40,22 +34,11 @@ export function getViteConfig(key) {
   return MOCK_CONFIG[key] ?? "";
 }
 
-/**
- * URL da API PHP (`messages.php`), ou string vazia se usar só SQLite no browser.
- * Em dev: só chama a API se `VITE_DEV_USE_REMOTE_MESSAGES_API` for `"true"` (via proxy `/api/messages`).
- * Em produção: usa sempre `VITE_MESSAGES_API_URL`.
- */
-export function getMessagesApiUrl() {
-  const raw = String(MOCK_CONFIG.VITE_MESSAGES_API_URL ?? "").trim();
-  if (!raw) return "";
-  if (import.meta.env.DEV) {
-    const useRemote =
-      MOCK_CONFIG.VITE_DEV_USE_REMOTE_MESSAGES_API === "true" ||
-      MOCK_CONFIG.VITE_DEV_USE_REMOTE_MESSAGES_API === "1";
-    if (!useRemote) return "";
-    return raw.startsWith("http") ? "/api/messages" : raw;
-  }
-  return raw;
+/** Supabase com URL e chave preenchidas em `MOCK_CONFIG`. */
+export function isSupabaseConfigured() {
+  const u = String(MOCK_CONFIG.VITE_SUPABASE_URL ?? "").trim();
+  const k = String(MOCK_CONFIG.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY ?? "").trim();
+  return u.length > 0 && k.length > 0;
 }
 
 export function useMockMessages() {
