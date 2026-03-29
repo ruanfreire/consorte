@@ -60,6 +60,9 @@ function cropCenterSquareToCircleDataUrl(img, size, quality) {
 
   let dataUrl = canvas.toDataURL("image/jpeg", quality);
 
+  if (dataUrl.length > 75_000) {
+    dataUrl = canvas.toDataURL("image/jpeg", Math.max(0.5, quality - 0.12));
+  }
   if (dataUrl.length > 120_000) {
     dataUrl = canvas.toDataURL("image/jpeg", Math.max(0.45, quality - 0.15));
   }

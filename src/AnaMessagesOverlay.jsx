@@ -3,9 +3,9 @@ import { AnaMessageModal } from "./AnaMessageModal.jsx";
 import { FloatingChatBubbles } from "./FloatingChatBubbles.jsx";
 import { hasSharedMessages, loadAnaMessages } from "./anaMessagesStorage.js";
 import { isLocalHost } from "./config.js";
-import { useAnaMessagesRealtime } from "./hooks/useFirestoreRealtime.js";
+import { useAnaMessagesRealtime } from "./hooks/useAnaMessagesRealtime.js";
 
-/** Junta entrada otimista à lista; evita duplicar quando o `onSnapshot` já trouxe o doc. */
+/** Junta entrada otimista à lista; evita duplicar quando o Realtime já trouxe o registo. */
 function mergeOptimisticEntries(entries, optimistic) {
   if (!optimistic) return entries;
   const duplicate = entries.some(
@@ -18,9 +18,9 @@ function mergeOptimisticEntries(entries, optimistic) {
 /**
  * Botão fixo + bolhas + modal para mensagens à Ana (história ou ecrã de countdown).
  *
- * Firestore: `useAnaMessagesRealtime` (onSnapshot) — atualização em tempo real sem polling.
+ * PostgreSQL (Supabase Realtime): `useAnaMessagesRealtime` — novos INSERTs sem polling.
  * Mock: `loadAnaMessages` + recarga ao fechar o modal.
- * Otimista: bolha aparece ao enviar; remove-se no `finally` ou dedupe quando o snapshot confirma.
+ * Otimista: bolha ao enviar; remove-se no `finally` ou dedupe quando o Realtime confirma.
  */
 export function AnaMessagesOverlay() {
   const shared = hasSharedMessages();
@@ -62,7 +62,7 @@ export function AnaMessagesOverlay() {
     [baseEntries, optimisticRow],
   );
 
-  const devFirestoreHint =
+  const devRealtimeHint =
     isLocalHost() &&
     shared &&
     liveError &&
@@ -70,7 +70,7 @@ export function AnaMessagesOverlay() {
 
   return (
     <>
-      {devFirestoreHint ? (
+      {devRealtimeHint ? (
         <div
           role="alert"
           style={{
@@ -91,7 +91,7 @@ export function AnaMessagesOverlay() {
             boxShadow: "0 6px 24px rgba(0,0,0,0.5)",
           }}
         >
-          [dev] Firestore listener: {devFirestoreHint}
+          [dev] Realtime: {devRealtimeHint}
         </div>
       ) : null}
       <FloatingChatBubbles entries={anaEntries} />

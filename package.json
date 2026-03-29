@@ -7,10 +7,11 @@
     "dev": "vite",
     "build": "vite build",
     "deploy:test": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "dataconnect:sdk:generate": "firebase dataconnect:sdk:generate"
   },
   "dependencies": {
-    "firebase": "^12.11.0",
+    "firebase": "^11.10.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
