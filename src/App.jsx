@@ -5,17 +5,21 @@ import {
   isStandalonePWA,
   requestFullscreenBestEffort,
 } from "./fullscreen.js";
+import {
+  allowUltimaPreviewFromConfig,
+  getViteConfig,
+  isDeployedProduction,
+  isLocalHost,
+} from "./config.js";
 import { AnaMessagesOverlay } from "./AnaMessagesOverlay.jsx";
 import { FloatingParty } from "./FloatingParty.jsx";
 import { getStepImages } from "./storyImages.js";
 
 const ASSET_BASE = import.meta.env.BASE_URL;
 
-/** Só com `?ultima=1` — dev ou build com VITE_PREVIEW_ULTIMA=true (ver env.example.txt). */
+/** Só com `?ultima=1` — em localhost ou com `VITE_PREVIEW_ULTIMA` em `config.js`. */
 function allowUltimaPreview() {
-  return (
-    import.meta.env.DEV || import.meta.env.VITE_PREVIEW_ULTIMA === "true"
-  );
+  return allowUltimaPreviewFromConfig();
 }
 
 function readUltimaQuery() {
@@ -60,16 +64,16 @@ function parseLaunchEndMs(raw) {
   return Number.isNaN(t) ? null : t;
 }
 
-/** Contagem regressiva só no build de produção; `npm run dev` ignora VITE_LAUNCH_AT. */
+/** Contagem regressiva só no site publicado (não em localhost); `npm run dev` em localhost ignora. */
 function useProductionCountdown() {
-  const endMs = parseLaunchEndMs(import.meta.env.VITE_LAUNCH_AT);
+  const endMs = parseLaunchEndMs(getViteConfig("VITE_LAUNCH_AT"));
   const [now, setNow] = useState(() => Date.now());
 
   const active =
-    import.meta.env.PROD && endMs != null && now < endMs;
+    isDeployedProduction() && endMs != null && now < endMs;
 
   useEffect(() => {
-    if (!import.meta.env.PROD || endMs == null) return;
+    if (!isDeployedProduction() || endMs == null) return;
     if (Date.now() >= endMs) return;
     const id = setInterval(() => {
       const n = Date.now();
@@ -139,7 +143,16 @@ function ProductionCountdownScreen({ endMs, nowMs }) {
           {String(h).padStart(2, "0")}:{String(m).padStart(2, "0")}:{String(s).padStart(2, "0")}
         </p>
       </div>
-      <AnaMessagesOverlay />
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 10,
+          pointerEvents: "none",
+        }}
+      >
+        <AnaMessagesOverlay />
+      </div>
     </div>
   );
 }
@@ -221,7 +234,7 @@ function StoryExperience() {
   const intervalRef = useRef(null);
   const holdTimer = useRef(null);
 
-  const charDelayMs = import.meta.env.DEV ? 20 : 85;
+  const charDelayMs = isLocalHost() ? 20 : 85;
 
   useEffect(() => {
     if (allowUltimaPreview() && readUltimaQuery() && step === messages.length - 1) {
@@ -280,8 +293,6 @@ function StoryExperience() {
     };
   }, []);
 
-  const isLastStep = step === messages.length - 1;
-
   const showFullscreenBanner =
     !standalone && !inFullscreen && !bannerDismissed;
 
@@ -306,7 +317,7 @@ function StoryExperience() {
 
   const next = () => {
     if (typing) {
-      if (import.meta.env.DEV) {
+      if (isLocalHost()) {
         clearInterval(intervalRef.current);
         setText(messages[step]);
         setTyping(false);
@@ -444,7 +455,7 @@ function StoryExperience() {
         </div>
       )}
 
-      {isLastStep && <AnaMessagesOverlay />}
+      <AnaMessagesOverlay />
 
       <div
         style={{
@@ -452,9 +463,8 @@ function StoryExperience() {
           maxWidth: "100%",
           position: "relative",
           zIndex: 2,
-          paddingBottom: isLastStep
-            ? "max(96px, calc(env(safe-area-inset-bottom) + 80px))"
-            : undefined,
+          paddingBottom:
+            "max(96px, calc(env(safe-area-inset-bottom) + 80px))",
         }}
       >
         <h1 style={{ lineHeight: 1.4, margin: 0 }}>

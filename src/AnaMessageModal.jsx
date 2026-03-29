@@ -1,12 +1,28 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { addAnaMessage, MAX_MESSAGE_CHARS } from "./anaMessagesStorage.js";
+import { isLocalHost } from "./config.js";
 import { AVATAR_OUTPUT_PX, fileToSmallRoundAvatarDataUrl } from "./imageCrop.js";
 
-export function AnaMessageModal({ open, onClose, onSaved }) {
+/**
+ * @param {(payload: { text: string; photoDataUrl: string }) => void} [onSubmitStart]
+ *   Chamado após validação local e **antes** de `addAnaMessage` — p.ex. UI otimista.
+ * @param {() => void} [onSubmitEnd]
+ *   Chamado no `finally` (sucesso ou erro) para limpar o estado otimista.
+ */
+export function AnaMessageModal({
+  open,
+  onClose,
+  onSaved,
+  onSubmitStart,
+  onSubmitEnd,
+}) {
   const [text, setText] = useState("");
   const [preview, setPreview] = useState(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [success, setSuccess] = useState(false);
+  /** Evita duplo envio (duplo clique / Enter) antes do estado `busy` atualizar. */
+  const submitLockRef = useRef(false);
 
   useEffect(() => {
     if (!open) {
@@ -14,6 +30,8 @@ export function AnaMessageModal({ open, onClose, onSaved }) {
       setPreview(null);
       setErr("");
       setBusy(false);
+      setSuccess(false);
+      submitLockRef.current = false;
     }
   }, [open]);
 
@@ -26,14 +44,33 @@ export function AnaMessageModal({ open, onClose, onSaved }) {
       setErr("Escolha uma foto.");
       return;
     }
+    if (submitLockRef.current || busy) return;
+    const trimmed = text.trim().slice(0, MAX_MESSAGE_CHARS);
+    if (!trimmed) {
+      setErr("Escreva uma mensagem.");
+      return;
+    }
+    submitLockRef.current = true;
     setBusy(true);
+    onSubmitStart?.({ text: trimmed, photoDataUrl: preview });
     try {
-      await addAnaMessage({ text, photoDataUrl: preview });
-      await onSaved?.();
+      await addAnaMessage({ text: trimmed, photoDataUrl: preview });
+      setSuccess(true);
+      await new Promise((r) => setTimeout(r, 900));
       onClose();
+      await onSaved?.();
     } catch (er) {
-      setErr(er.message || "Não foi possível salvar.");
+      const msg =
+        typeof er?.message === "string" && er.message.length > 0
+          ? er.message
+          : "Não foi possível salvar.";
+      setErr(msg);
+      if (isLocalHost()) {
+        console.error("[consorte] falha ao enviar mensagem:", er);
+      }
     } finally {
+      onSubmitEnd?.();
+      submitLockRef.current = false;
       setBusy(false);
     }
   };
@@ -60,6 +97,7 @@ export function AnaMessageModal({ open, onClose, onSaved }) {
         position: "fixed",
         inset: 0,
         zIndex: 5000,
+        pointerEvents: "auto",
         background: "rgba(0,0,0,0.75)",
         display: "flex",
         alignItems: "center",
@@ -68,7 +106,7 @@ export function AnaMessageModal({ open, onClose, onSaved }) {
           "max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left))",
         boxSizing: "border-box",
       }}
-      onClick={(e) => e.target === e.currentTarget && !busy && onClose()}
+      onClick={(e) => e.target === e.currentTarget && !busy && !success && onClose()}
     >
       <form
         onSubmit={submit}
@@ -83,6 +121,35 @@ export function AnaMessageModal({ open, onClose, onSaved }) {
         }}
         onClick={(e) => e.stopPropagation()}
       >
+        {success ? (
+          <div
+            role="status"
+            aria-live="polite"
+            style={{
+              textAlign: "center",
+              padding: "24px 8px",
+              fontFamily: "monospace",
+            }}
+          >
+            <p style={{ margin: 0, fontSize: 42, lineHeight: 1 }} aria-hidden>
+              💛
+            </p>
+            <p
+              style={{
+                margin: "16px 0 0",
+                fontSize: "clamp(16px, 4vw, 18px)",
+                color: "#9e8",
+                fontWeight: 600,
+              }}
+            >
+              Mensagem enviada!
+            </p>
+            <p style={{ margin: "10px 0 0", fontSize: 13, color: "#aaa" }}>
+              Obrigado — o teu carinho já faz parte da história.
+            </p>
+          </div>
+        ) : (
+          <>
         <h2
           id="ana-msg-title"
           style={{
@@ -186,6 +253,8 @@ export function AnaMessageModal({ open, onClose, onSaved }) {
             {busy ? "Salvando…" : "Enviar"}
           </button>
         </div>
+          </>
+        )}
       </form>
     </div>
   );

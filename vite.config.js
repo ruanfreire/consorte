@@ -1,10 +1,23 @@
-import { defineConfig, loadEnv } from "vite";
+import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { readFileSync, existsSync } from "fs";
 import { resolve } from "path";
+import { MOCK_CONFIG } from "./src/config.js";
 
-const GH_PAGES_BASE = "/consorte/";
 const OG_FILE = "og-cover.jpg";
+
+/** Base do Vite em produção (ex. `/consorte/`) — derivada de `MOCK_CONFIG.VITE_PUBLIC_SITE_URL`. */
+function viteBaseFromPublicSiteUrl(mode) {
+  if (mode !== "production") return "/";
+  const raw = String(MOCK_CONFIG.VITE_PUBLIC_SITE_URL ?? "").trim();
+  if (!raw) return "/consorte/";
+  try {
+    const pathname = new URL(raw.replace(/\/$/, "") + "/").pathname;
+    return pathname === "/" ? "/" : pathname;
+  } catch {
+    return "/consorte/";
+  }
+}
 
 function readPngDimensions(buf) {
   if (buf.length < 24) return null;
@@ -40,31 +53,6 @@ function readJpegDimensions(buf) {
   return null;
 }
 
-/** Parser simples de `.env` (sem dependência extra). */
-function parseEnvFile(relativePath) {
-  const full = resolve(process.cwd(), relativePath);
-  if (!existsSync(full)) return {};
-  const text = readFileSync(full, "utf8");
-  const out = {};
-  for (const line of text.split("\n")) {
-    const s = line.trim();
-    if (!s || s.startsWith("#")) continue;
-    const eq = s.indexOf("=");
-    if (eq < 1) continue;
-    const key = s.slice(0, eq).trim();
-    let val = s.slice(eq + 1).trim();
-    if (
-      (val.startsWith('"') && val.endsWith('"')) ||
-      (val.startsWith("'") && val.endsWith("'"))
-    ) {
-      val = val.slice(1, -1);
-    }
-    out[key] = val;
-  }
-  return out;
-}
-
-/** Dimensões e MIME reais (WhatsApp / LinkedIn / pré-visualizações). */
 function readOgCoverMeta() {
   const full = resolve(process.cwd(), "public", OG_FILE);
   const fallback = { w: 1200, h: 630, mime: "image/jpeg" };
@@ -82,56 +70,33 @@ function readOgCoverMeta() {
 }
 
 export default defineConfig(({ mode }) => {
-  const loaded = loadEnv(mode, process.cwd(), "");
-  const isCI =
-    process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
-  /** Em CI, variáveis do ambiente (secrets) ganham. Fora do CI, o `.env.production` versionado prevalece sobre variáveis soltas no SO (ex.: VITE_*). */
-  const committedEnvFile =
-    !isCI && mode === "production"
-      ? process.env.VITE_BUILD_MOCK === "true" ||
-        process.env.VITE_BUILD_MOCK === "1"
-        ? ".env.production.mock"
-        : ".env.production"
-      : null;
-  const committedProd =
-    committedEnvFile != null ? parseEnvFile(committedEnvFile) : {};
-  const defineFromCommitted = {};
-  for (const [k, v] of Object.entries(committedProd)) {
-    if (k.startsWith("VITE_")) {
-      defineFromCommitted[`import.meta.env.${k}`] = JSON.stringify(v ?? "");
-    }
-  }
-  const siteOrigin = (
-    committedProd.VITE_PUBLIC_SITE_URL ||
-    loaded.VITE_PUBLIC_SITE_URL ||
-    ""
-  ).replace(/\/$/, "");
+  const base = viteBaseFromPublicSiteUrl(mode);
+  const publicSite = String(MOCK_CONFIG.VITE_PUBLIC_SITE_URL ?? "")
+    .trim()
+    .replace(/\/$/, "");
   const ogMeta = readOgCoverMeta();
 
   return {
-    base: mode === "production" ? GH_PAGES_BASE : "/",
-    define: defineFromCommitted,
-    /** GitHub Pages (deploy pela branch) só aceita `/` ou `/docs` — não `dist`. */
+    base,
     build: { outDir: "docs", emptyOutDir: true },
     plugins: [
       react(),
       {
         name: "html-sharing-meta",
         transformIndexHtml(html) {
-          const basePath = mode === "production" ? "/consorte" : "";
-          const assetBase = mode === "production" ? "/consorte/" : "/";
+          const assetBase = mode === "production" ? base : "/";
           const canonical =
-            siteOrigin !== ""
-              ? `${siteOrigin}${basePath}/`
+            mode === "production" && publicSite !== ""
+              ? `${publicSite}/`
               : "";
           const ogImage =
-            siteOrigin !== ""
-              ? `${siteOrigin}${basePath}/${OG_FILE}`
+            mode === "production" && publicSite !== ""
+              ? `${publicSite}/${OG_FILE}`
               : "";
 
-          if (mode === "production" && siteOrigin === "") {
+          if (mode === "production" && publicSite === "") {
             console.warn(
-              "[consorte] Defina VITE_PUBLIC_SITE_URL (ex.: https://seu-usuario.github.io) para og:image e og:url absolutos no compartilhamento.",
+              "[consorte] Defina `VITE_PUBLIC_SITE_URL` em `src/config.js` (MOCK_CONFIG) para og:url / og:image.",
             );
           }
 

@@ -3,6 +3,7 @@ dist
 .DS_Store
 *.local
 .cursor/
+.env
+.env.*
 
 # Overrides locais (não versionar chaves reais aqui)
-# .env.production versionado = demo/mock; use .env.production.local para build real local.
