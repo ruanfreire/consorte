@@ -1,4 +1,5 @@
 import {
+  Timestamp,
   addDoc,
   collection,
   getDocs,
@@ -41,20 +42,26 @@ export function hasSharedMessages() {
   return activeBackend === "firestore";
 }
 
+/** Converte documento Firestore / mock para o formato da UI (`photo`, `at` em ms). */
+function msFromTimeField(v) {
+  if (v == null) return Date.now();
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string") {
+    const n = Number.parseInt(v, 10);
+    return Number.isFinite(n) ? n : Date.now();
+  }
+  if (typeof v?.toMillis === "function") return v.toMillis();
+  return Date.now();
+}
+
 function normalizeRow(row) {
-  const at = row.at;
-  const atNum =
-    typeof at === "number"
-      ? at
-      : typeof at === "string"
-        ? Number.parseInt(at, 10)
-        : typeof at?.toMillis === "function"
-          ? at.toMillis()
-          : Date.now();
+  const imageBase64 = row.imageBase64 ?? row.photo;
+  const atSource = row.createdAt ?? row.at;
+  const atNum = msFromTimeField(atSource);
   return {
     id: String(row.id ?? row._id ?? ""),
     text: String(row.text ?? ""),
-    photo: String(row.photo ?? ""),
+    photo: String(imageBase64 ?? ""),
     at: Number.isFinite(atNum) ? atNum : Date.now(),
   };
 }
@@ -93,7 +100,7 @@ async function loadFromFirestore() {
   if (!db) throw new Error("Firestore não inicializado.");
   const q = query(
     collection(db, FIRESTORE_COLLECTION),
-    orderBy("at", "asc"),
+    orderBy("createdAt", "asc"),
     limit(MAX_ROWS_REMOTE),
   );
   const snap = await getDocs(q);
@@ -155,14 +162,16 @@ export async function addAnaMessage({ text, photoDataUrl }) {
   const t = validatePayload(text, photoDataUrl);
   const atMs = Date.now();
   if (useMock) {
-    const row = normalizeRow({
+    const raw = {
       id: `mock-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       text: t,
-      photo: photoDataUrl,
-      at: atMs,
-    });
+      imageBase64: photoDataUrl,
+      createdAt: atMs,
+      updatedAt: atMs,
+    };
+    const row = normalizeRow(raw);
     const list = loadMockFromSession();
-    list.push(row);
+    list.push(raw);
     saveMockList(list);
     return row;
   }

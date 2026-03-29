@@ -1,17 +1,19 @@
 rules_version = '2';
-// Cole em Firebase Console → Firestore Database → Regras → Publicar.
-// Coleção: ana_messages — leitura pública; só criação; sem update/delete (append-only).
+// Cole em Firebase Console → Firestore → Regras → Publicar.
+// Documento: text, imageBase64, createdAt (timestamp), updatedAt (timestamp).
+// Docs antigos com photo/at: migrar ou apagar — a query ordena por createdAt.
 
 service cloud.firestore {
   match /databases/{database}/documents {
     match /ana_messages/{docId} {
       allow read: if true;
-      allow create: if request.resource.data.keys().hasAll(['text', 'photo', 'at'])
+      allow create: if request.resource.data.keys().hasAll(['text', 'imageBase64', 'createdAt', 'updatedAt'])
         && request.resource.data.text is string
-        && request.resource.data.photo is string
-        && request.resource.data.at is number
+        && request.resource.data.imageBase64 is string
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp
         && request.resource.data.text.size() <= 300
-        && request.resource.data.photo.size() <= 200000;
+        && request.resource.data.imageBase64.size() <= 200000;
       allow update, delete: if false;
     }
   }
