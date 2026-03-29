@@ -7,13 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "build:mock": "cross-env VITE_BUILD_MOCK=1 vite build",
-    "preview": "vite preview",
-    "server:install": "npm install --prefix server",
-    "server:init-db": "npm run init-db --prefix server",
-    "server:start": "npm start --prefix server"
+    "preview": "vite preview"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.100.1",
     "firebase": "^12.11.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

@@ -1,4 +1,3 @@
-import { createClient } from "@supabase/supabase-js";
 import {
   addDoc,
   collection,
@@ -21,51 +20,25 @@ const useMock =
   import.meta.env.VITE_USE_MOCK === "true" ||
   import.meta.env.VITE_USE_MOCK === "1";
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-const supabase =
-  !useMock &&
-  typeof supabaseUrl === "string" &&
-  supabaseUrl.length > 0 &&
-  typeof supabaseKey === "string" &&
-  supabaseKey.length > 0
-    ? createClient(supabaseUrl, supabaseKey)
-    : null;
-
-/** `auto` | `firestore` | `supabase` */
-const messagesBackend = import.meta.env.VITE_MESSAGES_BACKEND || "auto";
-
 function resolveBackend() {
   if (useMock) return "mock";
-  const fbOk = isFirebaseClientConfigured() && getFirestoreDb();
-  const sbOk = !!supabase;
-  if (messagesBackend === "firestore") {
-    return fbOk ? "firestore" : null;
-  }
-  if (messagesBackend === "supabase") {
-    return sbOk ? "supabase" : null;
-  }
-  if (fbOk) return "firestore";
-  if (sbOk) return "supabase";
+  if (isFirebaseClientConfigured() && getFirestoreDb()) return "firestore";
   return null;
 }
 
 const activeBackend = resolveBackend();
 
-function requireRemote() {
-  if (activeBackend === "firestore" || activeBackend === "supabase") {
-    return activeBackend;
-  }
+function requireFirestore() {
+  if (activeBackend === "firestore") return;
   throw new Error(
     import.meta.env.DEV
-      ? "Mensagens indisponíveis: defina Firestore (VITE_FIREBASE_*) ou Supabase (VITE_SUPABASE_*) no .env.local. Opcional: VITE_MESSAGES_BACKEND=firestore|supabase|auto."
-      : "Mensagens indisponíveis: o build não incluiu Firestore nem Supabase. Configure secrets ou .env.production.local.",
+      ? "Mensagens indisponíveis: defina as variáveis VITE_FIREBASE_* no .env.local (Firebase Console → Project settings → Web app)."
+      : "Mensagens indisponíveis: o build não incluiu Firebase. Configure secrets ou .env.production.local.",
   );
 }
 
 export function hasSharedMessages() {
-  return activeBackend === "firestore" || activeBackend === "supabase";
+  return activeBackend === "firestore";
 }
 
 function normalizeRow(row) {
@@ -86,7 +59,7 @@ function normalizeRow(row) {
   };
 }
 
-function devLogCount(n, label = "remote") {
+function devLogCount(n, label = "Firestore") {
   if (import.meta.env.DEV) {
     console.info(`[consorte] mensagens (${label}): ${n}`);
   }
@@ -127,7 +100,7 @@ async function loadFromFirestore() {
   const rows = snap.docs.map((d) =>
     normalizeRow({ id: d.id, ...d.data() }),
   );
-  devLogCount(rows.length, "Firestore");
+  devLogCount(rows.length);
   return rows;
 }
 
@@ -147,56 +120,19 @@ async function addToFirestore({ text, photoDataUrl, atMs }) {
   });
 }
 
-async function loadFromSupabase() {
-  if (!supabase) throw new Error("Supabase não configurado.");
-  const { data, error } = await supabase
-    .from("ana_messages")
-    .select("id, text, photo, at")
-    .order("at", { ascending: true })
-    .limit(MAX_ROWS_REMOTE);
-
-  if (error) {
-    console.warn("[consorte] Supabase:", error.code, error.message);
-    throw new Error("Não foi possível carregar as mensagens agora.");
-  }
-  const rows = (data || []).map(normalizeRow);
-  devLogCount(rows.length, "Supabase");
-  return rows;
-}
-
-async function addToSupabase({ text, photoDataUrl, atMs }) {
-  if (!supabase) throw new Error("Supabase não configurado.");
-  const { data, error } = await supabase
-    .from("ana_messages")
-    .insert({ text, photo: photoDataUrl, at: atMs })
-    .select("id, text, photo, at")
-    .single();
-
-  if (error) {
-    console.warn("[consorte] Falha ao enviar mensagem.", error.code);
-    throw new Error(
-      "Não foi possível enviar agora. Tente de novo em instantes.",
-    );
-  }
-  return normalizeRow(data);
-}
-
 export async function loadAnaMessages() {
   if (useMock) {
     const rows = loadMockFromSession();
     devLogCount(rows.length, "mock");
     return rows;
   }
-  requireRemote();
-  if (activeBackend === "firestore") {
-    try {
-      return await loadFromFirestore();
-    } catch (e) {
-      console.warn("[consorte] Firestore:", e);
-      throw new Error("Não foi possível carregar as mensagens agora.");
-    }
+  requireFirestore();
+  try {
+    return await loadFromFirestore();
+  } catch (e) {
+    console.warn("[consorte] Firestore:", e);
+    throw new Error("Não foi possível carregar as mensagens agora.");
   }
-  return loadFromSupabase();
 }
 
 function validatePayload(text, photoDataUrl) {
@@ -230,16 +166,13 @@ export async function addAnaMessage({ text, photoDataUrl }) {
     saveMockList(list);
     return row;
   }
-  requireRemote();
-  if (activeBackend === "firestore") {
-    try {
-      return await addToFirestore({ text: t, photoDataUrl, atMs });
-    } catch (e) {
-      console.warn("[consorte] Firestore insert:", e);
-      throw new Error(
-        "Não foi possível enviar agora. Tente de novo em instantes.",
-      );
-    }
+  requireFirestore();
+  try {
+    return await addToFirestore({ text: t, photoDataUrl, atMs });
+  } catch (e) {
+    console.warn("[consorte] Firestore insert:", e);
+    throw new Error(
+      "Não foi possível enviar agora. Tente de novo em instantes.",
+    );
   }
-  return addToSupabase({ text: t, photoDataUrl, atMs });
 }
