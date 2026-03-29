@@ -7,13 +7,12 @@
     "dev": "vite",
     "build": "vite build",
     "deploy:test": "vite build",
-    "preview": "vite preview",
-    "dataconnect:sdk:generate": "firebase dataconnect:sdk:generate"
+    "preview": "vite preview"
   },
   "dependencies": {
-    "firebase": "^11.10.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "sql.js": "^1.12.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",

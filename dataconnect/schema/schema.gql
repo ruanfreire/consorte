@@ -1,7 +1,0 @@
-type AnaMessage @table {
-  id: UUID! @default(expr: "uuidV4()")
-  text: String!
-  imageBase64: String!
-  createdAt: Timestamp! @default(expr: "request.time")
-  updatedAt: Timestamp! @default(expr: "request.time")
-}

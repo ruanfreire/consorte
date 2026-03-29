@@ -1,7 +1,0 @@
-connectorId: ana-connector
-# SDK gerado (opcional): `firebase dataconnect:sdk:generate`
-# generate:
-#   javascriptSdk:
-#     package: "@consorte/dataconnect"
-#     outputDir: ../../src/lib/dataconnect-generated
-#     packageJsonDir: ../..

@@ -17,7 +17,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Firebase e URL pública: `src/config.js` (`MOCK_CONFIG`) — sem variáveis de ambiente no build.
+    # URL pública e metadados: `src/config.js` (`MOCK_CONFIG`) — sem variáveis de ambiente no build.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

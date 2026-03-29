@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnaMessageModal } from "./AnaMessageModal.jsx";
 import { FloatingChatBubbles } from "./FloatingChatBubbles.jsx";
-import { hasSharedMessages, loadAnaMessages } from "./anaMessagesStorage.js";
-import { isLocalHost } from "./config.js";
-import { useAnaMessagesRealtime } from "./hooks/useAnaMessagesRealtime.js";
+import { loadAnaMessages, subscribeAnaMessages } from "./anaMessagesStorage.js";
 
-/** Junta entrada otimista à lista; evita duplicar quando o Realtime já trouxe o registo. */
+/** Junta entrada otimista à lista; evita duplicar quando o SQLite já devolveu o registo. */
 function mergeOptimisticEntries(entries, optimistic) {
   if (!optimistic) return entries;
   const duplicate = entries.some(
@@ -16,84 +14,45 @@ function mergeOptimisticEntries(entries, optimistic) {
 }
 
 /**
- * Botão fixo + bolhas + modal para mensagens à Ana (história ou ecrã de countdown).
- *
- * PostgreSQL (Supabase Realtime): `useAnaMessagesRealtime` — novos INSERTs sem polling.
- * Mock: `loadAnaMessages` + recarga ao fechar o modal.
- * Otimista: bolha ao enviar; remove-se no `finally` ou dedupe quando o Realtime confirma.
+ * Botão fixo + bolhas + modal para mensagens à Ana.
+ * Persistência: SQLite (sql.js) + IndexedDB — `subscribeAnaMessages` após cada INSERT.
  */
 export function AnaMessagesOverlay() {
-  const shared = hasSharedMessages();
-  const { entries: liveEntries, error: liveError } =
-    useAnaMessagesRealtime(shared);
-
-  const [mockEntries, setMockEntries] = useState([]);
+  const [entries, setEntries] = useState([]);
   const [optimisticRow, setOptimisticRow] = useState(null);
   const [anaModalOpen, setAnaModalOpen] = useState(false);
   const anaLoadSeqRef = useRef(0);
 
   useEffect(() => {
-    if (shared) return undefined;
+    let cancelled = false;
     const seq = ++anaLoadSeqRef.current;
-    loadAnaMessages()
-      .then((rows) => {
-        const stale = seq !== anaLoadSeqRef.current;
-        if (stale) return;
-        setMockEntries(rows);
-      })
-      .catch(() => {
-        if (seq !== anaLoadSeqRef.current) return;
-        setMockEntries([]);
-      });
-    return () => {
-      anaLoadSeqRef.current += 1;
+    const load = () => {
+      loadAnaMessages()
+        .then((rows) => {
+          if (cancelled || seq !== anaLoadSeqRef.current) return;
+          setEntries(rows);
+        })
+        .catch(() => {
+          if (cancelled || seq !== anaLoadSeqRef.current) return;
+          setEntries([]);
+        });
     };
-  }, [anaModalOpen, shared]);
+    load();
+    const unsub = subscribeAnaMessages(load);
+    return () => {
+      cancelled = true;
+      anaLoadSeqRef.current += 1;
+      unsub();
+    };
+  }, []);
 
-  useEffect(() => {
-    if (isLocalHost() && shared && liveError) {
-      console.warn("[consorte] ana_messages listener:", liveError);
-    }
-  }, [shared, liveError]);
-
-  const baseEntries = shared ? liveEntries : mockEntries;
   const anaEntries = useMemo(
-    () => mergeOptimisticEntries(baseEntries, optimisticRow),
-    [baseEntries, optimisticRow],
+    () => mergeOptimisticEntries(entries, optimisticRow),
+    [entries, optimisticRow],
   );
-
-  const devRealtimeHint =
-    isLocalHost() &&
-    shared &&
-    liveError &&
-    `${liveError?.code ?? "erro"}: ${liveError?.message ?? String(liveError)}`;
 
   return (
     <>
-      {devRealtimeHint ? (
-        <div
-          role="alert"
-          style={{
-            position: "fixed",
-            top: "max(8px, env(safe-area-inset-top))",
-            left: "50%",
-            transform: "translateX(-50%)",
-            zIndex: 9999,
-            maxWidth: "min(520px, calc(100vw - 24px))",
-            padding: "10px 14px",
-            borderRadius: 10,
-            border: "1px solid rgba(255,120,100,0.55)",
-            background: "rgba(45,20,18,0.96)",
-            color: "#ffc9c0",
-            fontFamily: "monospace",
-            fontSize: "clamp(10px, 2.8vw, 12px)",
-            lineHeight: 1.35,
-            boxShadow: "0 6px 24px rgba(0,0,0,0.5)",
-          }}
-        >
-          [dev] Realtime: {devRealtimeHint}
-        </div>
-      ) : null}
       <FloatingChatBubbles entries={anaEntries} />
       <button
         type="button"
@@ -137,10 +96,9 @@ export function AnaMessagesOverlay() {
         }}
         onSubmitEnd={() => setOptimisticRow(null)}
         onSaved={async () => {
-          if (shared) return;
           try {
             const rows = await loadAnaMessages();
-            setMockEntries(rows);
+            setEntries(rows);
           } catch {
             /* mantém lista atual */
           }
