@@ -27,10 +27,13 @@ function resolveBackend() {
   return null;
 }
 
-const activeBackend = resolveBackend();
+/** Recalcula a cada chamada — evita ficar sem Firebase se o .env carregar depois do primeiro import. */
+function getActiveBackend() {
+  return resolveBackend();
+}
 
 function requireFirestore() {
-  if (activeBackend === "firestore") return;
+  if (getActiveBackend() === "firestore") return;
   throw new Error(
     import.meta.env.DEV
       ? "Mensagens indisponíveis: defina as variáveis VITE_FIREBASE_* no .env.local (Firebase Console → Project settings → Web app)."
@@ -39,7 +42,7 @@ function requireFirestore() {
 }
 
 export function hasSharedMessages() {
-  return activeBackend === "firestore";
+  return getActiveBackend() === "firestore";
 }
 
 /** Converte documento Firestore / mock para o formato da UI (`photo`, `at` em ms). */
@@ -95,6 +98,21 @@ function saveMockList(rows) {
   }
 }
 
+function firestoreErrorMessage(err) {
+  const code = err?.code ?? "";
+  const msg = err?.message ?? String(err);
+  if (import.meta.env.DEV) {
+    console.error("[consorte] Firestore erro:", code, msg);
+  }
+  if (code === "permission-denied") {
+    return "Permissão negada: verifique as regras do Firestore (text, imageBase64, createdAt, updatedAt) e publique de novo.";
+  }
+  if (code === "failed-precondition") {
+    return "Índice em falta: abra o link do erro na consola (F12) e crie o índice no Firebase.";
+  }
+  return "Não foi possível concluir a operação. Tente de novo.";
+}
+
 async function loadFromFirestore() {
   const db = getFirestoreDb();
   if (!db) throw new Error("Firestore não inicializado.");
@@ -111,19 +129,23 @@ async function loadFromFirestore() {
   return rows;
 }
 
+/** Tem de coincidir com `firestore.rules` (imageBase64 + timestamps). */
 async function addToFirestore({ text, photoDataUrl, atMs }) {
   const db = getFirestoreDb();
   if (!db) throw new Error("Firestore não inicializado.");
+  const ts = Timestamp.fromMillis(atMs);
   const ref = await addDoc(collection(db, FIRESTORE_COLLECTION), {
     text,
-    photo: photoDataUrl,
-    at: atMs,
+    imageBase64: photoDataUrl,
+    createdAt: ts,
+    updatedAt: ts,
   });
   return normalizeRow({
     id: ref.id,
     text,
-    photo: photoDataUrl,
-    at: atMs,
+    imageBase64: photoDataUrl,
+    createdAt: atMs,
+    updatedAt: atMs,
   });
 }
 
@@ -137,8 +159,8 @@ export async function loadAnaMessages() {
   try {
     return await loadFromFirestore();
   } catch (e) {
-    console.warn("[consorte] Firestore:", e);
-    throw new Error("Não foi possível carregar as mensagens agora.");
+    console.warn("[consorte] Firestore load:", e);
+    throw new Error(firestoreErrorMessage(e));
   }
 }
 
@@ -180,8 +202,6 @@ export async function addAnaMessage({ text, photoDataUrl }) {
     return await addToFirestore({ text: t, photoDataUrl, atMs });
   } catch (e) {
     console.warn("[consorte] Firestore insert:", e);
-    throw new Error(
-      "Não foi possível enviar agora. Tente de novo em instantes.",
-    );
+    throw new Error(firestoreErrorMessage(e));
   }
 }
