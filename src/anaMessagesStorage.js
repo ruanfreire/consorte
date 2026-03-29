@@ -1,9 +1,19 @@
 import { createClient } from "@supabase/supabase-js";
+import {
+  addDoc,
+  collection,
+  getDocs,
+  limit,
+  orderBy,
+  query,
+} from "firebase/firestore";
+import { getFirestoreDb, isFirebaseClientConfigured } from "./firebaseDb.js";
 
 export const MAX_MESSAGE_CHARS = 300;
 /** Base64 do avatar pequeno (crop 72px JPEG). */
 const MAX_PHOTO_CHARS = 200_000;
 const MAX_ROWS_REMOTE = 80;
+const FIRESTORE_COLLECTION = "ana_messages";
 
 const MOCK_KEY = "consorte-mock-messages-v1";
 
@@ -23,19 +33,39 @@ const supabase =
     ? createClient(supabaseUrl, supabaseKey)
     : null;
 
-function requireSupabase() {
-  if (!supabase) {
-    throw new Error(
-      import.meta.env.DEV
-        ? "Mensagens indisponíveis: crie .env.local com VITE_SUPABASE_URL (https://xxx.supabase.co) e VITE_SUPABASE_ANON_KEY (Project Settings → API → anon public). Não use senha do Postgres nem connection string."
-        : "Mensagens indisponíveis: o build não incluiu o Supabase. Use GitHub Actions com secrets ou .env.production.local + npm run build.",
-    );
+/** `auto` | `firestore` | `supabase` */
+const messagesBackend = import.meta.env.VITE_MESSAGES_BACKEND || "auto";
+
+function resolveBackend() {
+  if (useMock) return "mock";
+  const fbOk = isFirebaseClientConfigured() && getFirestoreDb();
+  const sbOk = !!supabase;
+  if (messagesBackend === "firestore") {
+    return fbOk ? "firestore" : null;
   }
-  return supabase;
+  if (messagesBackend === "supabase") {
+    return sbOk ? "supabase" : null;
+  }
+  if (fbOk) return "firestore";
+  if (sbOk) return "supabase";
+  return null;
+}
+
+const activeBackend = resolveBackend();
+
+function requireRemote() {
+  if (activeBackend === "firestore" || activeBackend === "supabase") {
+    return activeBackend;
+  }
+  throw new Error(
+    import.meta.env.DEV
+      ? "Mensagens indisponíveis: defina Firestore (VITE_FIREBASE_*) ou Supabase (VITE_SUPABASE_*) no .env.local. Opcional: VITE_MESSAGES_BACKEND=firestore|supabase|auto."
+      : "Mensagens indisponíveis: o build não incluiu Firestore nem Supabase. Configure secrets ou .env.production.local.",
+  );
 }
 
 export function hasSharedMessages() {
-  return !!supabase;
+  return activeBackend === "firestore" || activeBackend === "supabase";
 }
 
 function normalizeRow(row) {
@@ -45,7 +75,9 @@ function normalizeRow(row) {
       ? at
       : typeof at === "string"
         ? Number.parseInt(at, 10)
-        : Date.now();
+        : typeof at?.toMillis === "function"
+          ? at.toMillis()
+          : Date.now();
   return {
     id: String(row.id ?? row._id ?? ""),
     text: String(row.text ?? ""),
@@ -54,7 +86,7 @@ function normalizeRow(row) {
   };
 }
 
-function devLogCount(n, label = "Supabase") {
+function devLogCount(n, label = "remote") {
   if (import.meta.env.DEV) {
     console.info(`[consorte] mensagens (${label}): ${n}`);
   }
@@ -83,15 +115,41 @@ function saveMockList(rows) {
   }
 }
 
-/** Apenas leitura do Supabase — sem localStorage. */
-export async function loadAnaMessages() {
-  if (useMock) {
-    const rows = loadMockFromSession();
-    devLogCount(rows.length, "mock");
-    return rows;
-  }
-  const client = requireSupabase();
-  const { data, error } = await client
+async function loadFromFirestore() {
+  const db = getFirestoreDb();
+  if (!db) throw new Error("Firestore não inicializado.");
+  const q = query(
+    collection(db, FIRESTORE_COLLECTION),
+    orderBy("at", "asc"),
+    limit(MAX_ROWS_REMOTE),
+  );
+  const snap = await getDocs(q);
+  const rows = snap.docs.map((d) =>
+    normalizeRow({ id: d.id, ...d.data() }),
+  );
+  devLogCount(rows.length, "Firestore");
+  return rows;
+}
+
+async function addToFirestore({ text, photoDataUrl, atMs }) {
+  const db = getFirestoreDb();
+  if (!db) throw new Error("Firestore não inicializado.");
+  const ref = await addDoc(collection(db, FIRESTORE_COLLECTION), {
+    text,
+    photo: photoDataUrl,
+    at: atMs,
+  });
+  return normalizeRow({
+    id: ref.id,
+    text,
+    photo: photoDataUrl,
+    at: atMs,
+  });
+}
+
+async function loadFromSupabase() {
+  if (!supabase) throw new Error("Supabase não configurado.");
+  const { data, error } = await supabase
     .from("ana_messages")
     .select("id, text, photo, at")
     .order("at", { ascending: true })
@@ -102,8 +160,43 @@ export async function loadAnaMessages() {
     throw new Error("Não foi possível carregar as mensagens agora.");
   }
   const rows = (data || []).map(normalizeRow);
-  devLogCount(rows.length);
+  devLogCount(rows.length, "Supabase");
   return rows;
+}
+
+async function addToSupabase({ text, photoDataUrl, atMs }) {
+  if (!supabase) throw new Error("Supabase não configurado.");
+  const { data, error } = await supabase
+    .from("ana_messages")
+    .insert({ text, photo: photoDataUrl, at: atMs })
+    .select("id, text, photo, at")
+    .single();
+
+  if (error) {
+    console.warn("[consorte] Falha ao enviar mensagem.", error.code);
+    throw new Error(
+      "Não foi possível enviar agora. Tente de novo em instantes.",
+    );
+  }
+  return normalizeRow(data);
+}
+
+export async function loadAnaMessages() {
+  if (useMock) {
+    const rows = loadMockFromSession();
+    devLogCount(rows.length, "mock");
+    return rows;
+  }
+  requireRemote();
+  if (activeBackend === "firestore") {
+    try {
+      return await loadFromFirestore();
+    } catch (e) {
+      console.warn("[consorte] Firestore:", e);
+      throw new Error("Não foi possível carregar as mensagens agora.");
+    }
+  }
+  return loadFromSupabase();
 }
 
 function validatePayload(text, photoDataUrl) {
@@ -122,34 +215,31 @@ function validatePayload(text, photoDataUrl) {
   return t;
 }
 
-/** Apenas insert no Supabase — sem localStorage. */
 export async function addAnaMessage({ text, photoDataUrl }) {
   const t = validatePayload(text, photoDataUrl);
+  const atMs = Date.now();
   if (useMock) {
     const row = normalizeRow({
       id: `mock-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       text: t,
       photo: photoDataUrl,
-      at: Date.now(),
+      at: atMs,
     });
     const list = loadMockFromSession();
     list.push(row);
     saveMockList(list);
     return row;
   }
-  const client = requireSupabase();
-
-  const { data, error } = await client
-    .from("ana_messages")
-    .insert({ text: t, photo: photoDataUrl, at: Date.now() })
-    .select("id, text, photo, at")
-    .single();
-
-  if (error) {
-    console.warn("[consorte] Falha ao enviar mensagem.", error.code);
-    throw new Error(
-      "Não foi possível enviar agora. Tente de novo em instantes.",
-    );
+  requireRemote();
+  if (activeBackend === "firestore") {
+    try {
+      return await addToFirestore({ text: t, photoDataUrl, atMs });
+    } catch (e) {
+      console.warn("[consorte] Firestore insert:", e);
+      throw new Error(
+        "Não foi possível enviar agora. Tente de novo em instantes.",
+      );
+    }
   }
-  return normalizeRow(data);
+  return addToSupabase({ text: t, photoDataUrl, atMs });
 }
