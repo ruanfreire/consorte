@@ -25,6 +25,7 @@ jobs:
           node-version: "20"
           cache: npm
       - run: npm ci
+      # Gera `docs/` (vite.config outDir). Manter o mesmo comando em local antes de commitar `docs/`.
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:
