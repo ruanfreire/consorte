@@ -116,11 +116,11 @@ export function AnaMessageModal({
         style={{
           width: "100%",
           maxWidth: 400,
-          background: "#1a1a1a",
+          background: "linear-gradient(145deg, #1f1a18 0%, #141210 100%)",
           borderRadius: 16,
           padding: 20,
-          border: "1px solid rgba(255,255,255,0.2)",
-          boxShadow: "0 16px 48px rgba(0,0,0,0.6)",
+          border: "1px solid rgba(255,200,150,0.22)",
+          boxShadow: "0 16px 48px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,190,100,0.06)",
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -141,14 +141,14 @@ export function AnaMessageModal({
               style={{
                 margin: "16px 0 0",
                 fontSize: "clamp(16px, 4vw, 18px)",
-                color: "#9e8",
+                color: "#c8e0a8",
                 fontWeight: 600,
               }}
             >
-              Mensagem enviada!
+              Foi! Obrigado pelo carinho
             </p>
-            <p style={{ margin: "10px 0 0", fontSize: 13, color: "#aaa" }}>
-              Obrigado — o teu carinho já faz parte da história.
+            <p style={{ margin: "10px 0 0", fontSize: 13, color: "#b8a898", lineHeight: 1.45 }}>
+              A Ana vai receber com um sorriso — cada mensagem é um abraço na história 🫶
             </p>
           </div>
         ) : (
@@ -159,14 +159,14 @@ export function AnaMessageModal({
             margin: "0 0 16px",
             fontSize: "clamp(15px, 4vw, 18px)",
             fontFamily: "monospace",
-            color: "#fff",
-            lineHeight: 1.3,
+            color: "#fff8f0",
+            lineHeight: 1.35,
           }}
         >
-          Mensagem para a Ana
+          Um carinho para a Ana 💛
         </h2>
-        <p style={{ margin: "0 0 12px", fontSize: 12, opacity: 0.75, color: "#ccc" }}>
-          Foto recortada no centro em quadrado, redonda ({AVATAR_OUTPUT_PX}px) — leve. Texto: máximo{" "}
+        <p style={{ margin: "0 0 12px", fontSize: 12, opacity: 0.82, color: "#c9beb8", lineHeight: 1.45 }}>
+          Escolhe uma foto (recorte redondo, {AVATAR_OUTPUT_PX}px) e escreve com o coração — até{" "}
           {MAX_MESSAGE_CHARS} caracteres.
         </p>
 
@@ -253,7 +253,7 @@ export function AnaMessageModal({
               cursor: busy || !preview ? "default" : "pointer",
             }}
           >
-            {busy ? "Salvando…" : "Enviar"}
+            {busy ? "A enviar…" : "Enviar com carinho"}
           </button>
         </div>
           </>

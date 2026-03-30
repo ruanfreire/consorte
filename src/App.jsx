@@ -27,6 +27,12 @@ function readUltimaQuery() {
   return new URL(window.location.href).searchParams.get("ultima") === "1";
 }
 
+/** Localhost: `?countdown=1` força o ecrã de contagem (requer `VITE_LAUNCH_AT` no futuro). */
+function readCountdownPreviewQuery() {
+  if (typeof window === "undefined") return false;
+  return new URL(window.location.href).searchParams.get("countdown") === "1";
+}
+
 function StoryImage({ config }) {
   const [hidden, setHidden] = useState(false);
   if (!config || hidden) return null;
@@ -112,7 +118,8 @@ function ProductionCountdownScreen({ endMs, nowMs }) {
         justifyContent: "center",
         padding:
           "max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left))",
-        background: "#000",
+        background:
+          "radial-gradient(ellipse 120% 80% at 50% 20%, rgba(90, 40, 55, 0.55) 0%, transparent 55%), radial-gradient(ellipse 100% 60% at 50% 100%, rgba(120, 70, 30, 0.35) 0%, transparent 50%), linear-gradient(180deg, #0d0608 0%, #000 45%, #070506 100%)",
         color: "#fff",
         fontFamily: "monospace",
         textAlign: "center",
@@ -120,29 +127,78 @@ function ProductionCountdownScreen({ endMs, nowMs }) {
         overflow: "hidden",
       }}
     >
-      <FloatingParty count={32} />
+      <FloatingParty count={36} />
       <div
         style={{
           position: "relative",
           zIndex: 2,
           pointerEvents: "none",
+          maxWidth: "min(420px, 92vw)",
         }}
       >
-        <p style={{ margin: "0 0 16px", opacity: 0.85, fontSize: "clamp(13px, 3.5vw, 16px)" }}>
-          A história abre em
+        <p
+          style={{
+            margin: "0 0 8px",
+            fontSize: "clamp(15px, 4vw, 20px)",
+            fontWeight: 600,
+            color: "#ffd8a8",
+            letterSpacing: "0.02em",
+            lineHeight: 1.35,
+          }}
+        >
+          Quase lá… o coração já conta os segundos 💛
         </p>
         <p
           style={{
+            margin: "0 0 20px",
+            opacity: 0.88,
+            fontSize: "clamp(12px, 3.2vw, 14px)",
+            color: "#e8c4b5",
+            lineHeight: 1.45,
+          }}
+        >
+          Depois disto, uma história feita com calma e com amor — promessa de gente grande 🫶
+        </p>
+        <p style={{ margin: "0 0 12px", opacity: 0.75, fontSize: "clamp(11px, 3vw, 13px)", color: "#c9a89a" }}>
+          Falta pouco para abrir
+        </p>
+        <p
+          className="countdown-digits"
+          style={{
             margin: 0,
-            fontSize: "clamp(1.4rem, 7vw, 2.4rem)",
-            letterSpacing: "0.06em",
+            fontSize: "clamp(1.5rem, 8vw, 2.6rem)",
+            letterSpacing: "0.08em",
             fontVariantNumeric: "tabular-nums",
+            color: "#fff5e8",
+            textShadow: "0 0 28px rgba(255, 200, 120, 0.35), 0 2px 12px rgba(0,0,0,0.5)",
           }}
         >
           {days > 0 ? `${days}d ` : ""}
           {String(h).padStart(2, "0")}:{String(m).padStart(2, "0")}:{String(s).padStart(2, "0")}
         </p>
+        <p
+          style={{
+            margin: "18px 0 0",
+            fontSize: "clamp(11px, 2.8vw, 13px)",
+            color: "#9a7d72",
+            fontStyle: "italic",
+          }}
+        >
+          Até já — a ansiedade boa também é amor ✨
+        </p>
       </div>
+      <style>{`
+        @keyframes countdownGlow {
+          0%, 100% { opacity: 1; filter: brightness(1); }
+          50% { opacity: 0.95; filter: brightness(1.06); }
+        }
+        .countdown-digits {
+          animation: countdownGlow 3.5s ease-in-out infinite;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .countdown-digits { animation: none; }
+        }
+      `}</style>
       <div
         style={{
           position: "fixed",
@@ -455,7 +511,7 @@ function StoryExperience() {
         </div>
       )}
 
-      <AnaMessagesOverlay />
+      <AnaMessagesOverlay showFloatingBubbles={false} />
 
       <div
         style={{
@@ -495,7 +551,9 @@ function StoryExperience() {
         )}
 
         {step !== messages.length - 1 && (
-          <p style={{ marginTop: 20, color: "#b8b8b8" }}>(toque na tela) 👆💛</p>
+          <p style={{ marginTop: 20, color: "#c9a896", fontSize: "clamp(12px, 3.2vw, 14px)" }}>
+            toca na tela para continuar — devagar também é carinho 👆💛
+          </p>
         )}
 
         <audio
@@ -522,9 +580,29 @@ function StoryExperience() {
 
 export default function App() {
   const { active, endMs, now } = useProductionCountdown();
+  const launchEndMs = parseLaunchEndMs(getViteConfig("VITE_LAUNCH_AT"));
+
+  const devCountdownPreview =
+    isLocalHost() &&
+    readCountdownPreviewQuery() &&
+    launchEndMs != null &&
+    Date.now() < launchEndMs;
+
+  const [devNowMs, setDevNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (!devCountdownPreview) return;
+    const id = setInterval(() => setDevNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [devCountdownPreview]);
 
   if (active) {
     return <ProductionCountdownScreen endMs={endMs} nowMs={now} />;
+  }
+
+  if (devCountdownPreview) {
+    return (
+      <ProductionCountdownScreen endMs={launchEndMs} nowMs={devNowMs} />
+    );
   }
 
   return <StoryExperience />;
