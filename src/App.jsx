@@ -495,7 +495,7 @@ function StoryExperience() {
         )}
 
         {step !== messages.length - 1 && (
-          <p style={{ marginTop: 20, opacity: 0.4 }}>(toque na tela) 👆💛</p>
+          <p style={{ marginTop: 20, color: "#b8b8b8" }}>(toque na tela) 👆💛</p>
         )}
 
         <audio

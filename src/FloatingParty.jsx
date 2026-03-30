@@ -55,7 +55,6 @@ export function FloatingParty({ count = 30 }) {
             fontSize: `clamp(${0.85 * p.scale}rem, ${3.8 * p.scale}vw, ${2.1 * p.scale}rem)`,
             lineHeight: 1,
             animation: `partyFloat${p.variant} ${p.duration}s cubic-bezier(0.4, 0, 0.2, 1) ${p.delay}s infinite`,
-            filter: "drop-shadow(0 0 8px rgba(255, 190, 90, 0.4))",
             willChange: "transform",
           }}
         >
@@ -66,9 +65,6 @@ export function FloatingParty({ count = 30 }) {
         @keyframes partyFloat0 {
           0% {
             transform: translate3d(0, 108vh, 0) rotate(-18deg) scale(0.55);
-            opacity: 0;
-          }
-          5% {
             opacity: 1;
           }
           20% {
@@ -85,7 +81,7 @@ export function FloatingParty({ count = 30 }) {
           }
           100% {
             transform: translate3d(8px, -24vh, 0) rotate(400deg) scale(0.65);
-            opacity: 0.2;
+            opacity: 1;
           }
         }
         @keyframes partyFloat1 {
@@ -113,9 +109,6 @@ export function FloatingParty({ count = 30 }) {
         @keyframes partyFloat2 {
           0% {
             transform: translate3d(0, 104vh, 0) rotate(0deg) scale(0.65);
-            opacity: 0;
-          }
-          8% {
             opacity: 1;
           }
           28% {
@@ -129,7 +122,7 @@ export function FloatingParty({ count = 30 }) {
           }
           100% {
             transform: translate3d(-14px, -22vh, 0) rotate(480deg) scale(0.72);
-            opacity: 0.25;
+            opacity: 1;
           }
         }
       `}</style>

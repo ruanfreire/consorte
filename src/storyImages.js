@@ -16,7 +16,7 @@ const STEP_GIFS = {
   33: { src: GIPHY("iKx1NwH9qIni3Ecfcr"), alt: "", kind: "gif" },
   40: { src: GIPHY("26BRv0ThflsHCqDrG"), alt: "", kind: "gif" },
   /** "e hoje… eu celebro você" — celebração (índice alinhado a `messages` em App.jsx) */
-  48: { src: GIPHY("3o7aD2saalBwwftBIY"), alt: "", kind: "gif" },
+  48: { src: GIPHY("RiWKyEvESTJS97Tovo"), alt: "", kind: "gif" },
   /** Última mensagem — "PARABÉNS E EU TE AMO…" (happy birthday / parabéns) */
   50: { src: GIPHY("ytwDCGipNV2sTbndUA"), alt: "Parabéns", kind: "gif" },
 };

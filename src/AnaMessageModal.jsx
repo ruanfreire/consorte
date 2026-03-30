@@ -3,6 +3,9 @@ import { addAnaMessage, MAX_MESSAGE_CHARS } from "./anaMessagesStorage.js";
 import { isLocalHost } from "./config.js";
 import { AVATAR_OUTPUT_PX, fileToSmallRoundAvatarDataUrl } from "./imageCrop.js";
 
+/** Quanto tempo o ecrã de sucesso fica visível antes de fechar o modal (ms). */
+const SUCCESS_SCREEN_MS = 3200;
+
 /**
  * @param {(payload: { text: string; photoDataUrl: string }) => void} [onSubmitStart]
  *   Chamado após validação local e **antes** de `addAnaMessage` — p.ex. UI otimista.
@@ -56,7 +59,7 @@ export function AnaMessageModal({
     try {
       await addAnaMessage({ text: trimmed, photoDataUrl: preview });
       setSuccess(true);
-      await new Promise((r) => setTimeout(r, 900));
+      await new Promise((r) => setTimeout(r, SUCCESS_SCREEN_MS));
       onClose();
       await onSaved?.();
     } catch (er) {
