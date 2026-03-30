@@ -5,7 +5,8 @@
 
 export const MOCK_CONFIG = {
   VITE_USE_MOCK: "false",
-  VITE_LAUNCH_AT: "2026-04-03T19:00:00-03:00",
+  /** Abertura da história: 3 abr 2026, 00:01 (fuso −03:00). */
+  VITE_LAUNCH_AT: "2026-04-03T00:01:00-03:00",
   VITE_PUBLIC_SITE_URL: "https://ruanfreire.github.io/consorte",
   VITE_PREVIEW_ULTIMA: "",
 
