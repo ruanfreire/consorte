@@ -14,6 +14,8 @@ import {
 import { AnaMessagesOverlay } from "./AnaMessagesOverlay.jsx";
 import { FloatingParty } from "./FloatingParty.jsx";
 import { getStepImages } from "./storyImages.js";
+import { STORY_MESSAGES } from "./storyMessages.js";
+import { StoryBookView } from "./StoryBookView.jsx";
 
 const ASSET_BASE = import.meta.env.BASE_URL;
 
@@ -31,6 +33,12 @@ function readUltimaQuery() {
 function readCountdownPreviewQuery() {
   if (typeof window === "undefined") return false;
   return new URL(window.location.href).searchParams.get("countdown") === "1";
+}
+
+/** Abre direto a vista “livro” com `?book=1`. */
+function readBookQuery() {
+  if (typeof window === "undefined") return false;
+  return new URL(window.location.href).searchParams.get("book") === "1";
 }
 
 function StoryImage({ config }) {
@@ -214,61 +222,7 @@ function ProductionCountdownScreen({ endMs, nowMs }) {
 }
 
 function StoryExperience() {
-  const messages = [
-    "toque na tela e entre nessa história 💛✨🐻",
-    "a gente não se encontrou 🫣",
-    "a gente se reconheceu 🧠✨💫",
-    "no meio de tanta conversa vazia 🫠",
-    "tinha alguma coisa ali 👀💛",
-    "não era comum 😳",
-    "não era raso 🌊❌",
-    "era diferente ✨🫶",
-    "eu pedi 20 dias ⏳🥹",
-    "não foi distância 🚫📏",
-    "foi escolha 🧠💛",
-    "foi porque eu quis te entender 🫶",
-    "não só te viver rápido ⚡",
-    "e você ficou 🫠💛🫶",
-    "e isso disse muito mais 🥹",
-    "porque hoje em dia… 😶",
-    "ficar é raro 🫠",
-    "no meio disso tudo 🌍✨",
-    "a gente criou um mundo nosso 🐻💛",
-    "com eitaaaaa 😂🔥",
-    "com porrrrraaaaaaaan 🤣💥",
-    "com tápora lagartixa 🦎💀😂",
-    "e isso… 🥹",
-    "isso é intimidade de verdade 💛",
-    "eu não me apaixonei só por você 🫶",
-    "eu me apaixonei por como você pensa 🧠💫",
-    "pela forma que você se posiciona 👑",
-    "pela forma que você não se diminui 🔥",
-    "pela forma que você sustenta outras mulheres 👑💛",
-    "pela forma que você cria espaço pra elas existirem 🌱✨",
-    "isso não é detalhe ❌",
-    "isso é quem você é 💛",
-    "e eu vejo isso 👀",
-    "e eu admiro isso 🫶",
-    "e eu sinto orgulho disso ❤️🔥",
-    "orgulho da mulher que você é 👑💛",
-    "orgulho da pessoa que você é 🫠",
-    "e do jeito que você cuida de mim 🥹💛",
-
-    "mas hoje… não é um dia qualquer 🎂✨",
-    "hoje é o seu dia 💛🥹",
-    "o dia da mulher incrível que você é 👑",
-    "o dia da sua existência nesse mundo 🌍✨",
-    "que sorte a minha de viver isso com você 🫶",
-
-    "essa história é pequena agora 🫣",
-    "mas o que ela é ✨",
-    "e o que ela vai ser 🚀",
-    "é gigante 🌌💛",
-    "ela é movimento 💫",
-    "e hoje… eu celebro você 🎉🎂💛",
-    "e eu escolhi ficar 🫶",
-    "PARABÉNS E EU TE AMO <3 💛🐻✨",
-  ];
+  const messages = STORY_MESSAGES;
 
   const shouldStartAtUltima =
     typeof window !== "undefined" &&
@@ -284,6 +238,7 @@ function StoryExperience() {
   const [inFullscreen, setInFullscreen] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [iosHelp, setIosHelp] = useState(false);
+  const [bookOpen, setBookOpen] = useState(() => readBookQuery());
 
   const musicRef = useRef(null);
   const typeRef = useRef(null);
@@ -406,6 +361,15 @@ function StoryExperience() {
   const holdEnd = () => clearTimeout(holdTimer.current);
 
   const stepImages = getStepImages(ASSET_BASE);
+
+  if (bookOpen) {
+    return (
+      <StoryBookView
+        messages={messages}
+        onClose={() => setBookOpen(false)}
+      />
+    );
+  }
 
   return (
     <div
@@ -535,19 +499,51 @@ function StoryExperience() {
         <StoryImage config={stepImages[step]} />
 
         {step === messages.length - 1 && (
-          <button
-            type="button"
-            onClick={restart}
+          <div
             style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 12,
               marginTop: 20,
-              padding: "10px 20px",
-              borderRadius: 20,
-              border: "none",
-              cursor: "pointer",
             }}
+            onClick={(e) => e.stopPropagation()}
           >
-            recomeçar 🔁💛
-          </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setBookOpen(true);
+              }}
+              style={{
+                padding: "12px 22px",
+                borderRadius: 20,
+                border: "1px solid rgba(255,200,100,0.45)",
+                background: "linear-gradient(165deg, rgba(55,38,32,0.95) 0%, rgba(28,22,18,0.98) 100%)",
+                color: "#ffe8c8",
+                fontFamily: "monospace",
+                fontSize: "clamp(12px, 3.2vw, 14px)",
+                fontWeight: 600,
+                cursor: "pointer",
+                boxShadow: "0 6px 20px rgba(0,0,0,0.35)",
+              }}
+            >
+              Ver tudo como livro 📖💛
+            </button>
+            <button
+              type="button"
+              onClick={restart}
+              style={{
+                padding: "10px 20px",
+                borderRadius: 20,
+                border: "none",
+                cursor: "pointer",
+                fontFamily: "monospace",
+              }}
+            >
+              recomeçar 🔁💛
+            </button>
+          </div>
         )}
 
         {step !== messages.length - 1 && (
