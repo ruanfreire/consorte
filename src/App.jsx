@@ -35,10 +35,47 @@ function readCountdownPreviewQuery() {
   return new URL(window.location.href).searchParams.get("countdown") === "1";
 }
 
+const BOOK_ENTRY_SESSION_KEY = "consorte_book_entry";
+
 /** Abre direto a vista “livro” com `?book=1`. */
 function readBookQuery() {
   if (typeof window === "undefined") return false;
   return new URL(window.location.href).searchParams.get("book") === "1";
+}
+
+/**
+ * Entrada com `?book=1` ignora a contagem; após fechar o livro o URL pode perder o
+ * parâmetro — mantém a sessão na mesma aba para não cair no ecrã de contagem.
+ */
+function shouldShowStoryForBookDeepLink() {
+  if (typeof window === "undefined") return false;
+  if (readBookQuery()) {
+    try {
+      sessionStorage.setItem(BOOK_ENTRY_SESSION_KEY, "1");
+    } catch {
+      /* ignore quota / private mode */
+    }
+    return true;
+  }
+  try {
+    return sessionStorage.getItem(BOOK_ENTRY_SESSION_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+/** Mantém o URL alinhado ao estado do livro (partilhar link / voltar sem ?book=1). */
+function syncBookQueryParam(open) {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  if (open) {
+    url.searchParams.set("book", "1");
+  } else {
+    url.searchParams.delete("book");
+  }
+  const qs = url.searchParams.toString();
+  const next = url.pathname + (qs ? `?${qs}` : "") + url.hash;
+  window.history.replaceState(null, "", next);
 }
 
 function StoryImage({ config }) {
@@ -366,7 +403,10 @@ function StoryExperience() {
     return (
       <StoryBookView
         messages={messages}
-        onClose={() => setBookOpen(false)}
+        onClose={() => {
+          setBookOpen(false);
+          syncBookQueryParam(false);
+        }}
       />
     );
   }
@@ -513,6 +553,7 @@ function StoryExperience() {
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
+                syncBookQueryParam(true);
                 setBookOpen(true);
               }}
               style={{
@@ -590,6 +631,11 @@ export default function App() {
     const id = setInterval(() => setDevNowMs(Date.now()), 1000);
     return () => clearInterval(id);
   }, [devCountdownPreview]);
+
+  /** Deep link: `?book=1` abre o livro mesmo durante a contagem em produção. */
+  if (shouldShowStoryForBookDeepLink()) {
+    return <StoryExperience />;
+  }
 
   if (active) {
     return <ProductionCountdownScreen endMs={endMs} nowMs={now} />;
